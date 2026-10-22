@@ -722,6 +722,11 @@ export default function ShoppingPortal() {
               initialProductName={selectedOrderProduct}
               initialPrice={selectedOrderPrice}
               onBack={() => setActiveTab('catalog')}
+              onOpenLogin={() => setLoginModalOpen(true)}
+              onOrderSubmitted={() => {
+                setSelectedOrderProduct('');
+                setSelectedOrderPrice(null);
+              }}
             />
           </div>
         )}
