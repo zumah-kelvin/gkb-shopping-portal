@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { CheckCircle, Clock3, Package, RefreshCw, ShoppingBag, ArrowLeft, MessageSquare, User } from 'lucide-react';
+import { CheckCircle, Clock3, Package, RefreshCw, ShoppingBag, ArrowLeft, MessageSquare, User, XCircle, AlertTriangle } from 'lucide-react';
 import { relaySupabase } from './supabase';
 
-type OrderStatus = 'pending' | 'processing' | 'delivered' | 'picked_up';
+type OrderStatus = 'pending' | 'processing' | 'delivered' | 'picked_up' | 'cancelled';
 type FulfillmentMethod = 'delivery' | 'pickup';
 
 export type Order = {
@@ -34,14 +34,16 @@ const statusLabels: Record<OrderStatus, string> = {
   pending: 'Awaiting review',
   processing: 'Processing',
   delivered: 'Delivered',
-  picked_up: 'Picked up'
+  picked_up: 'Picked up',
+  cancelled: 'Cancelled'
 };
 
 const statusStyles: Record<OrderStatus, string> = {
   pending: 'border-amber-500/30 bg-amber-500/10 text-amber-200',
   processing: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-200',
   delivered: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200',
-  picked_up: 'border-purple-500/30 bg-purple-500/10 text-purple-200'
+  picked_up: 'border-purple-500/30 bg-purple-500/10 text-purple-200',
+  cancelled: 'border-red-500/30 bg-red-500/10 text-red-300'
 };
 
 function formatDate(value: string): string {
@@ -85,6 +87,7 @@ export default function OrdersPortal({
   const [successMessage, setSuccessMessage] = useState('');
   const [saving, setSaving] = useState(false);
   const [updatingOrderId, setUpdatingOrderId] = useState('');
+  const [confirmCancelOrderId, setConfirmCancelOrderId] = useState<string | null>(null);
   const [productName, setProductName] = useState(initialProductName);
   const [orderConfirmation, setOrderConfirmation] = useState<{
     productName: string;
@@ -328,6 +331,48 @@ export default function OrdersPortal({
       await loadOrders();
     } catch (updateError) {
       setError(`Order status could not be updated: ${errorMessage(updateError)}`);
+    } finally {
+      setUpdatingOrderId('');
+    }
+  };
+
+  const handleCancelOrder = async (order: Order) => {
+    setUpdatingOrderId(order.id);
+    setError('');
+    const nextStatus: OrderStatus = 'cancelled';
+    const updatedAt = new Date().toISOString();
+
+    try {
+      if (relaySupabase) {
+        try {
+          await relaySupabase
+            .from('gkb_orders')
+            .update({ status: nextStatus, status_updated_at: updatedAt })
+            .eq('id', order.id);
+        } catch (dbErr) {
+          console.warn('Could not update status on Supabase, applying locally:', dbErr);
+        }
+      }
+
+      // Update in localStorage
+      try {
+        const stored = window.localStorage.getItem('gkb_guest_orders');
+        if (stored) {
+          const list = JSON.parse(stored) as Order[];
+          const updatedList = list.map(o => (o.id === order.id ? { ...o, status: nextStatus, status_updated_at: updatedAt } : o));
+          window.localStorage.setItem('gkb_guest_orders', JSON.stringify(updatedList));
+        }
+      } catch {
+        // ignore
+      }
+
+      // Update local state
+      setOrders(prev => prev.map(o => (o.id === order.id ? { ...o, status: nextStatus, status_updated_at: updatedAt } : o)));
+      setConfirmCancelOrderId(null);
+      setSuccessMessage(`Order #${order.id} has been cancelled.`);
+      setTimeout(() => setSuccessMessage(''), 5000);
+    } catch (err) {
+      setError(`Failed to cancel order: ${errorMessage(err)}`);
     } finally {
       setUpdatingOrderId('');
     }
@@ -692,6 +737,8 @@ export default function OrdersPortal({
                   <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold ${statusStyles[order.status] || 'border-slate-700 text-slate-300'}`}>
                     {order.status === 'delivered' || order.status === 'picked_up' ? (
                       <CheckCircle className="h-3.5 w-3.5" />
+                    ) : order.status === 'cancelled' ? (
+                      <XCircle className="h-3.5 w-3.5 text-red-400" />
                     ) : (
                       <Clock3 className="h-3.5 w-3.5" />
                     )}
@@ -711,12 +758,67 @@ export default function OrdersPortal({
                   )}
                 </div>
 
+                {/* Client Cancellation Option */}
+                {!isAdmin && (order.status === 'pending' || order.status === 'processing') && (
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-800/80 pt-3">
+                    <p className="text-[11px] text-slate-400">
+                      Need to cancel? You can cancel your order before it is dispatched.
+                    </p>
+                    {confirmCancelOrderId === order.id ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs text-amber-300 font-semibold">Confirm cancellation?</span>
+                        <button
+                          type="button"
+                          disabled={updatingOrderId === order.id}
+                          onClick={() => void handleCancelOrder(order)}
+                          className="rounded-lg bg-red-600 hover:bg-red-500 px-3 py-1.5 text-xs font-bold text-white transition-all disabled:opacity-50 cursor-pointer"
+                        >
+                          {updatingOrderId === order.id ? 'Cancelling...' : 'Yes, Cancel Order'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmCancelOrderId(null)}
+                          className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:text-white transition-all cursor-pointer"
+                        >
+                          Nevermind
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmCancelOrderId(order.id)}
+                        className="rounded-lg border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 px-3 py-1.5 text-xs font-semibold text-red-300 transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <XCircle className="h-3.5 w-3.5" />
+                        Cancel Order
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Cancelled Notice & Support */}
+                {order.status === 'cancelled' && (
+                  <div className="mt-4 border-t border-slate-800/80 pt-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="text-red-400 font-mono flex items-center gap-1.5">
+                      <XCircle className="h-3.5 w-3.5" /> This order was cancelled.
+                    </span>
+                    <a
+                      href={`https://wa.me/233552117787?text=${encodeURIComponent(`Hello Kelvin Zumah, regarding my cancelled order #${order.id} (${order.product_name})...`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-slate-400 hover:text-cyan-300 transition-colors flex items-center gap-1 text-[11px]"
+                    >
+                      <MessageSquare className="h-3.5 w-3.5 text-emerald-400" /> Have questions? Chat with support
+                    </a>
+                  </div>
+                )}
+
                 {/* Admin Status Transitions */}
                 {isAdmin && (
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-800/80 pt-3">
                     <span className="text-xs font-mono text-slate-400">Update Status:</span>
                     <div className="flex flex-wrap gap-2">
-                      {(['pending', 'processing', 'delivered', 'picked_up'] as OrderStatus[]).map(st => (
+                      {(['pending', 'processing', 'delivered', 'picked_up', 'cancelled'] as OrderStatus[]).map(st => (
                         <button
                           key={st}
                           type="button"
@@ -724,9 +826,9 @@ export default function OrdersPortal({
                           onClick={() => void handleStatusChange(order, st)}
                           className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
                             order.status === st
-                              ? 'bg-cyan-500 text-black'
+                              ? st === 'cancelled' ? 'bg-red-500 text-white' : 'bg-cyan-500 text-black'
                               : 'bg-slate-950 border border-slate-700 text-slate-300 hover:border-cyan-400'
-                          } disabled:opacity-40`}
+                          } disabled:opacity-40 cursor-pointer`}
                         >
                           {statusLabels[st]}
                         </button>
