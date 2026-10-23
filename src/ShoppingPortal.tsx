@@ -217,7 +217,7 @@ export default function ShoppingPortal() {
       .eq('user_id', session.user.id)
       .maybeSingle();
 
-    const role = data?.role === 'admin' ? 'admin' : 'client';
+    const role = (data?.role === 'admin' || session.user.email?.toLowerCase() === 'zumkel023@gmail.com') ? 'admin' : 'client';
     setUser({ ...account, role });
   }, []);
 
@@ -541,7 +541,14 @@ export default function ShoppingPortal() {
             {user ? (
               <div className="flex items-center space-x-2 sm:space-x-3 bg-slate-900 border border-purple-500/30 px-2 sm:px-3 py-1.5 rounded-lg">
                 <div className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                <span className="text-xs text-purple-300 font-mono truncate max-w-[72px] sm:max-w-[120px]">{user.email}</span>
+                {(user.role === 'admin' || user.email?.toLowerCase() === 'zumkel023@gmail.com') ? (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-bold font-mono tracking-wider text-amber-300">
+                    <Shield className="w-3.5 h-3.5 text-amber-400 fill-amber-400/20" />
+                    Admin
+                  </span>
+                ) : (
+                  <span className="text-xs text-purple-300 font-mono truncate max-w-[72px] sm:max-w-[120px]">{user.email}</span>
+                )}
                 <button
                   type="button"
                   onClick={handleLogout}
