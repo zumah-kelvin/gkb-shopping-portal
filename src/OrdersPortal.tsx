@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { CheckCircle, Clock3, Package, RefreshCw, ShoppingBag, ArrowLeft, MessageSquare, User, XCircle, AlertTriangle } from 'lucide-react';
+import { CheckCircle, Clock3, Package, RefreshCw, ShoppingBag, ArrowLeft, MessageSquare, User, XCircle, AlertTriangle, Lock } from 'lucide-react';
 import { relaySupabase } from './supabase';
 
 type OrderStatus = 'pending' | 'processing' | 'delivered' | 'picked_up' | 'cancelled';
@@ -108,6 +108,17 @@ export default function OrdersPortal({
   useEffect(() => {
     if (initialProductName) setProductName(initialProductName);
   }, [initialProductName]);
+
+  // Sync user details when user logs in
+  useEffect(() => {
+    if (user) {
+      const name = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
+      if (name) setCustomerName(name);
+      if (user.phone) setCustomerPhone(user.phone);
+      if (user.location) setDeliveryAddress(user.location);
+    }
+  }, [user]);
+
 
   // Update fields if user logs in later
   useEffect(() => {
@@ -538,7 +549,59 @@ export default function OrdersPortal({
 
       {/* ================= ORDER FORM (Non-Admin) ================= */}
       {!isAdmin && (
-        <section className="rounded-3xl border border-cyan-500/30 bg-slate-900/70 p-6 sm:p-8 backdrop-blur-xl shadow-xl space-y-6">
+        !user ? (
+          <section className="rounded-3xl border border-cyan-500/40 bg-slate-900/80 p-8 sm:p-12 text-center backdrop-blur-xl shadow-2xl space-y-6 animate-fadeIn">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-cyan-500/20 to-purple-500/20 border border-cyan-500/40 text-cyan-400 shadow-[0_0_30px_rgba(6,182,212,0.3)]">
+              <Lock className="h-8 w-8" />
+            </div>
+            <div className="max-w-md mx-auto space-y-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-cyan-300">
+                ⚡ Client Account Required
+              </span>
+              <h3 className="text-2xl font-black text-white">Sign In to Complete Your Order</h3>
+              <p className="text-xs sm:text-sm text-slate-400">
+                Just like Jumia, please sign in or create your GKB client account to proceed with delivery details, secure your hardware warranty, and receive instant MTN Mobile Money payment confirmation.
+              </p>
+            </div>
+
+            {productName && (
+              <div className="max-w-md mx-auto flex items-center justify-between p-4 rounded-2xl border border-slate-800 bg-slate-950/80 text-left">
+                <div className="flex items-center gap-3 min-w-0">
+                  <Package className="h-5 w-5 text-purple-400 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">Item Selected</p>
+                    <p className="text-sm font-bold text-white truncate">{productName}</p>
+                  </div>
+                </div>
+                {effectivePrice !== null && (
+                  <span className="text-sm sm:text-base font-black text-yellow-300 shrink-0 ml-3">
+                    GHS {effectivePrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                )}
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 max-w-sm mx-auto pt-2">
+              <button
+                type="button"
+                onClick={onOpenLogin}
+                className="w-full sm:w-auto flex-1 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-600 px-6 py-3.5 text-xs font-bold uppercase tracking-wider text-black shadow-lg shadow-cyan-500/25 hover:scale-105 transition-all cursor-pointer"
+              >
+                Sign In / Create Account
+              </button>
+              {onBack && (
+                <button
+                  type="button"
+                  onClick={onBack}
+                  className="w-full sm:w-auto rounded-xl border border-slate-700 bg-slate-800/60 px-5 py-3.5 text-xs font-semibold text-slate-300 hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  Back to Store
+                </button>
+              )}
+            </div>
+          </section>
+        ) : (
+          <section className="rounded-3xl border border-cyan-500/30 bg-slate-900/70 p-6 sm:p-8 backdrop-blur-xl shadow-xl space-y-6">
           <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
             <div className="rounded-xl bg-cyan-500/10 p-2.5 text-cyan-400 border border-cyan-500/20">
               <ShoppingBag className="h-6 w-6" />
@@ -677,6 +740,7 @@ export default function OrdersPortal({
             </button>
           </form>
         </section>
+        )
       )}
 
       {/* ================= ORDER TRACKING LIST ================= */}

@@ -222,12 +222,27 @@ export default function ShoppingPortal() {
   }, []);
 
   useEffect(() => {
+    // Check saved client session for immediate recovery
+    const saved = window.localStorage.getItem('gkb_client_session');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as UserType;
+        if (parsed && (parsed.email || parsed.phone)) {
+          setUser(parsed);
+        }
+      } catch {
+        // ignore
+      }
+    }
+
     if (!relaySupabase) return;
     const { data: { subscription } } = relaySupabase.auth.onAuthStateChange((_event, session) => {
       void applyPortalSession(session);
     });
     void relaySupabase.auth.getSession().then(({ data }) => {
-      void applyPortalSession(data.session);
+      if (data.session) {
+        void applyPortalSession(data.session);
+      }
     });
     return () => {
       subscription.unsubscribe();
@@ -294,21 +309,37 @@ export default function ShoppingPortal() {
           }
         });
         if (error) throw error;
-        if (!data.session) {
-          setLoginMessage('Account created! Please check your email inbox to verify your address, then sign in.');
-          setCreatingAccount(false);
-          setLoginPassword('');
-          return;
-        }
+
+        // Establish client account immediately so the order flow is uninterrupted
+        const clientAccount: UserType = {
+          id: data.user?.id || ('client-' + Date.now()),
+          role: 'client',
+          email: loginEmail.trim(),
+          firstName: signupFirstName.trim(),
+          lastName: signupLastName.trim(),
+          phone: signupPhone.trim(),
+          location: signupLocation.trim()
+        };
+        setUser(clientAccount);
+        window.localStorage.setItem('gkb_client_session', JSON.stringify(clientAccount));
       } else {
         const identifier = loginEmail.trim();
         const credentials = identifier.includes('@')
           ? { email: identifier, password: loginPassword }
           : { phone: identifier, password: loginPassword };
-        const { error } = await relaySupabase.auth.signInWithPassword(credentials);
+        const { data, error } = await relaySupabase.auth.signInWithPassword(credentials);
         if (error) throw error;
+        if (data.session) {
+          await applyPortalSession(data.session);
+        }
       }
       setLoginModalOpen(false);
+
+      // Just like Jumia: if user selected a product, transition directly into checkout!
+      if (selectedOrderProduct) {
+        setActiveTab('order');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
     } catch (error) {
       setLoginError(error instanceof Error ? error.message : 'Sign-in failed.');
     } finally {
@@ -320,6 +351,7 @@ export default function ShoppingPortal() {
     if (relaySupabase) {
       await relaySupabase.auth.signOut();
     }
+    window.localStorage.removeItem('gkb_client_session');
     setUser(null);
     setActiveTab('catalog');
   };
@@ -403,6 +435,15 @@ export default function ShoppingPortal() {
   const handleOrderProduct = (product: InventoryItem) => {
     setSelectedOrderProduct(product.title);
     setSelectedOrderPrice(product.price);
+
+    if (!user) {
+      // Just like Jumia: prompt client to sign in or sign up before proceeding
+      setLoginError('');
+      setLoginMessage(`Please sign in or create an account to proceed with ordering "${product.brand} ${product.title}".`);
+      setLoginModalOpen(true);
+      return;
+    }
+
     setActiveTab('order');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -455,7 +496,15 @@ export default function ShoppingPortal() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('order')}
+              onClick={() => {
+                if (!user) {
+                  setLoginError('');
+                  setLoginMessage('Please sign in or create an account to view and place orders.');
+                  setLoginModalOpen(true);
+                  return;
+                }
+                setActiveTab('order');
+              }}
               className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'order' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'text-slate-400 hover:text-cyan-300'}`}
             >
               Order & Track
@@ -930,13 +979,66 @@ export default function ShoppingPortal() {
       {loginModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="w-full max-w-md rounded-2xl border border-cyan-500/40 bg-slate-900 p-6 sm:p-8 shadow-[0_0_50px_rgba(6,182,212,0.3)] space-y-5 animate-scaleUp">
-            <div className="text-center space-y-1">
+            <div className="text-center space-y-2">
+              <span className="inline-flex items-center gap-1 rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider text-cyan-300">
+                ⚡ GKB Secure Checkout
+              </span>
               <h3 className="text-xl font-black text-white">
                 {creatingAccount ? 'Create Client Account' : 'Sign in to GKB Store'}
               </h3>
               <p className="text-xs text-slate-400">
-                {creatingAccount ? 'Register to prefill your delivery details and track orders.' : 'Sign in to review your orders and access client services.'}
+                {creatingAccount ? 'Register in 30 seconds to prefill your delivery details and track orders.' : 'Sign in to review your orders and proceed with your purchase.'}
               </p>
+            </div>
+
+            {/* Jumia-style selected item banner */}
+            {selectedOrderProduct && (
+              <div className="flex items-center justify-between rounded-xl border border-cyan-500/30 bg-cyan-950/50 p-3 text-left">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-cyan-500/20 text-cyan-300">
+                    <ShoppingBag className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-400">Order in Progress</p>
+                    <p className="truncate text-xs font-bold text-white">{selectedOrderProduct}</p>
+                  </div>
+                </div>
+                {selectedOrderPrice !== null && (
+                  <span className="shrink-0 text-xs font-black text-yellow-300 ml-2">
+                    GHS {selectedOrderPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Jumia-style Tabs */}
+            <div className="flex rounded-xl bg-slate-950 p-1 border border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setCreatingAccount(false);
+                  setLoginError('');
+                  setLoginMessage('');
+                }}
+                className={`flex-1 rounded-lg py-2 text-xs font-bold transition-all ${
+                  !creatingAccount ? 'bg-cyan-500 text-black shadow-md' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCreatingAccount(true);
+                  setLoginError('');
+                  setLoginMessage('');
+                }}
+                className={`flex-1 rounded-lg py-2 text-xs font-bold transition-all ${
+                  creatingAccount ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Create Account
+              </button>
             </div>
 
             {loginError && (
