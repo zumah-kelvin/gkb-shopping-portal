@@ -926,8 +926,8 @@ export default function ShoppingPortal() {
                   onClick={() => { setSelectedCategory('all'); setSelectedBrand('All'); }}
                   className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
                     selectedCategory === 'all'
-                      ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-black shadow-md shadow-cyan-500/25'
-                      : 'bg-slate-900/80 text-slate-300 border border-slate-800 hover:border-cyan-500/40 hover:text-cyan-300'
+                      ? 'gkb-store-tab-active bg-cyan-500 text-slate-950 font-black shadow-md shadow-cyan-500/25 border border-cyan-400'
+                      : 'gkb-store-tab-inactive bg-slate-900/80 text-slate-300 border border-slate-800 hover:border-cyan-500/40 hover:text-cyan-300'
                   }`}
                 >
                   <Layers className="h-4 w-4" />
@@ -942,8 +942,8 @@ export default function ShoppingPortal() {
                   onClick={() => { setSelectedCategory('laptops'); setSelectedBrand('All'); }}
                   className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
                     selectedCategory === 'laptops'
-                      ? 'bg-cyan-500 text-black font-black shadow-md shadow-cyan-500/25'
-                      : 'bg-slate-900/80 text-slate-300 border border-slate-800 hover:border-cyan-500/40 hover:text-cyan-300'
+                      ? 'gkb-store-tab-active bg-cyan-500 text-slate-950 font-black shadow-md shadow-cyan-500/25 border border-cyan-400'
+                      : 'gkb-store-tab-inactive bg-slate-900/80 text-slate-300 border border-slate-800 hover:border-cyan-500/40 hover:text-cyan-300'
                   }`}
                 >
                   <Laptop className="h-4 w-4" />
@@ -958,8 +958,8 @@ export default function ShoppingPortal() {
                   onClick={() => { setSelectedCategory('phones'); setSelectedBrand('All'); }}
                   className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
                     selectedCategory === 'phones'
-                      ? 'bg-purple-500 text-white font-black shadow-md shadow-purple-500/25'
-                      : 'bg-slate-900/80 text-slate-300 border border-slate-800 hover:border-purple-500/40 hover:text-purple-300'
+                      ? 'gkb-store-tab-active bg-cyan-500 text-slate-950 font-black shadow-md shadow-cyan-500/25 border border-cyan-400'
+                      : 'gkb-store-tab-inactive bg-slate-900/80 text-slate-300 border border-slate-800 hover:border-cyan-500/40 hover:text-cyan-300'
                   }`}
                 >
                   <Smartphone className="h-4 w-4" />
@@ -974,8 +974,8 @@ export default function ShoppingPortal() {
                   onClick={() => { setSelectedCategory('gadgets'); setSelectedBrand('All'); }}
                   className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
                     selectedCategory === 'gadgets'
-                      ? 'bg-emerald-500 text-black font-black shadow-md shadow-emerald-500/25'
-                      : 'bg-slate-900/80 text-slate-300 border border-slate-800 hover:border-emerald-500/40 hover:text-emerald-300'
+                      ? 'gkb-store-tab-active bg-cyan-500 text-slate-950 font-black shadow-md shadow-cyan-500/25 border border-cyan-400'
+                      : 'gkb-store-tab-inactive bg-slate-900/80 text-slate-300 border border-slate-800 hover:border-cyan-500/40 hover:text-cyan-300'
                   }`}
                 >
                   <HardDrive className="h-4 w-4" />
@@ -1003,10 +1003,10 @@ export default function ShoppingPortal() {
                       key={sub.key}
                       type="button"
                       onClick={() => setSelectedGadgetType(sub.key)}
-                      className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+                      className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                         selectedGadgetType === sub.key
-                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50'
-                          : 'bg-slate-900/60 text-slate-400 border border-slate-800 hover:text-white'
+                          ? 'gkb-subfilter-active bg-cyan-500/20 text-cyan-300 border border-cyan-500/50'
+                          : 'gkb-subfilter-inactive bg-slate-900/60 text-slate-400 border border-slate-800 hover:text-white'
                       }`}
                     >
                       {sub.label}
@@ -1044,8 +1044,8 @@ export default function ShoppingPortal() {
                       onClick={() => setSelectedBrand(brand)}
                       className={`rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                         selectedBrand === brand
-                          ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/50'
-                          : 'border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-white'
+                          ? 'gkb-subfilter-active bg-cyan-500/20 text-cyan-300 border border-cyan-500/50'
+                          : 'gkb-subfilter-inactive border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-white'
                       }`}
                     >
                       {brand}
@@ -1194,7 +1194,7 @@ export default function ShoppingPortal() {
                         <button
                           type="button"
                           onClick={() => handleOrderProduct(item)}
-                          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-600 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-black shadow-md shadow-cyan-500/20 hover:scale-105 transition-all cursor-pointer"
+                          className="gkb-order-btn inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-600 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-black shadow-md shadow-cyan-500/20 hover:scale-105 transition-all cursor-pointer"
                         >
                           Order Now
                           <ArrowRight className="h-3.5 w-3.5" />
@@ -1239,7 +1239,7 @@ export default function ShoppingPortal() {
                 <button
                   type="button"
                   onClick={() => setShowSqlHelper(v => !v)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-purple-500/40 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 text-xs font-mono font-bold transition-all cursor-pointer self-start sm:self-auto"
+                  className="gkb-sql-helper-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800/80 text-slate-300 hover:text-cyan-300 hover:border-cyan-500/40 text-xs font-mono font-medium transition-all cursor-pointer self-start sm:self-auto"
                 >
                   <Cpu className="h-3.5 w-3.5" />
                   {showSqlHelper ? 'Hide SQL Migration' : 'Supabase SQL Helper'}
@@ -1248,9 +1248,9 @@ export default function ShoppingPortal() {
 
               {/* Optional SQL Migration Card for Admin */}
               {showSqlHelper && (
-                <div className="mt-4 p-4 rounded-xl border border-purple-500/40 bg-slate-950/90 space-y-3 animate-fadeIn">
+                <div className="mt-4 p-4 rounded-xl border border-slate-700 bg-slate-950/90 space-y-3 animate-fadeIn">
                   <div className="flex items-center justify-between">
-                    <p className="text-xs font-mono text-purple-300 font-bold flex items-center gap-1.5">
+                    <p className="text-xs font-mono text-cyan-400 font-bold flex items-center gap-1.5">
                       <Sparkles className="h-3.5 w-3.5" /> Optional: Supabase Schema Upgrade SQL
                     </p>
                     <button
@@ -1261,19 +1261,19 @@ export default function ShoppingPortal() {
                         setSqlCopied(true);
                         setTimeout(() => setSqlCopied(false), 2500);
                       }}
-                      className="px-2.5 py-1 rounded bg-purple-500/20 text-purple-200 border border-purple-500/40 text-[11px] font-mono hover:bg-purple-500/30 flex items-center gap-1"
+                      className="px-2.5 py-1 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 text-[11px] font-mono hover:bg-cyan-500/20 flex items-center gap-1 transition-all"
                     >
                       {sqlCopied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
                       {sqlCopied ? 'Copied SQL!' : 'Copy SQL Script'}
                     </button>
                   </div>
-                  <pre className="text-[11px] font-mono text-slate-400 bg-slate-900 p-3 rounded-lg overflow-x-auto">
+                  <pre className="text-[11px] font-mono text-slate-300 bg-slate-900 p-3 rounded-lg overflow-x-auto border border-slate-800">
 {`-- Run once in Supabase SQL Editor if you want native category columns:
 ALTER TABLE public.gkb_inventory_items ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'laptops';
 ALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_items_ram_check;
 ALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_items_storage_check;`}
                   </pre>
-                  <p className="text-[11px] text-slate-500">
+                  <p className="text-[11px] text-slate-400">
                     *Note: Our portal automatically preserves all categories and specs in highlights metadata even if you haven't run the SQL yet!
                   </p>
                 </div>
@@ -1282,17 +1282,17 @@ ALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_i
               <form onSubmit={handleAddInventoryItem} className="mt-6 grid gap-4 sm:grid-cols-2">
                 {/* 1. Main Category Dropdown */}
                 <div className="sm:col-span-2">
-                  <label className="text-xs font-bold text-cyan-300 uppercase tracking-wider block mb-1">
+                  <label className="text-xs font-bold text-cyan-400 dark:text-cyan-300 uppercase tracking-wider block mb-2">
                     Select Product Category
                   </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                     <button
                       type="button"
                       onClick={() => handleAdminCategoryChange('laptops')}
-                      className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                      className={`flex items-center justify-center gap-2.5 p-3 rounded-xl border text-xs sm:text-sm font-bold transition-all cursor-pointer ${
                         inventoryCategory === 'laptops'
-                          ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400 shadow-md shadow-cyan-500/20'
-                          : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
+                          ? 'gkb-cat-tab-active bg-cyan-500/20 text-cyan-300 border-cyan-400 shadow-sm shadow-cyan-500/20 ring-1 ring-cyan-400/40'
+                          : 'gkb-cat-tab-inactive bg-slate-950/60 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700'
                       }`}
                     >
                       <Laptop className="h-4 w-4" />
@@ -1302,10 +1302,10 @@ ALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_i
                     <button
                       type="button"
                       onClick={() => handleAdminCategoryChange('phones')}
-                      className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                      className={`flex items-center justify-center gap-2.5 p-3 rounded-xl border text-xs sm:text-sm font-bold transition-all cursor-pointer ${
                         inventoryCategory === 'phones'
-                          ? 'bg-purple-500/20 text-purple-300 border-purple-400 shadow-md shadow-purple-500/20'
-                          : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
+                          ? 'gkb-cat-tab-active bg-cyan-500/20 text-cyan-300 border-cyan-400 shadow-sm shadow-cyan-500/20 ring-1 ring-cyan-400/40'
+                          : 'gkb-cat-tab-inactive bg-slate-950/60 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700'
                       }`}
                     >
                       <Smartphone className="h-4 w-4" />
@@ -1315,10 +1315,10 @@ ALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_i
                     <button
                       type="button"
                       onClick={() => handleAdminCategoryChange('gadgets')}
-                      className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                      className={`flex items-center justify-center gap-2.5 p-3 rounded-xl border text-xs sm:text-sm font-bold transition-all cursor-pointer ${
                         inventoryCategory === 'gadgets'
-                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400 shadow-md shadow-emerald-500/20'
-                          : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
+                          ? 'gkb-cat-tab-active bg-cyan-500/20 text-cyan-300 border-cyan-400 shadow-sm shadow-cyan-500/20 ring-1 ring-cyan-400/40'
+                          : 'gkb-cat-tab-inactive bg-slate-950/60 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700'
                       }`}
                     >
                       <HardDrive className="h-4 w-4" />
@@ -1328,12 +1328,12 @@ ALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_i
                 </div>
 
                 {/* 2. Brand Dropdown with custom option */}
-                <label className="text-xs text-slate-300">
+                <label className="text-xs font-semibold text-slate-300">
                   Brand / Manufacturer
                   <select
                     value={inventoryBrandSelect}
                     onChange={e => setInventoryBrandSelect(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-cyan-400 focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-cyan-400 focus:outline-none transition-colors"
                   >
                     {(inventoryCategory === 'laptops'
                       ? laptopBrandOptions
@@ -1348,7 +1348,7 @@ ALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_i
 
                 {/* Custom Brand input if 'Other' is selected */}
                 {inventoryBrandSelect === 'Other (Custom Brand)' ? (
-                  <label className="text-xs text-slate-300">
+                  <label className="text-xs font-semibold text-slate-300">
                     Custom Brand Name
                     <input
                       type="text"
@@ -1357,7 +1357,7 @@ ALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_i
                       maxLength={100}
                       required
                       placeholder="e.g., Nothing, Razer, Sony, Baseus..."
-                      className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-cyan-400 focus:outline-none"
+                      className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-cyan-400 focus:outline-none transition-colors"
                     />
                   </label>
                 ) : (
@@ -1366,12 +1366,12 @@ ALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_i
 
                 {/* 3. Electronic Gadget Subcategory if Gadgets selected */}
                 {inventoryCategory === 'gadgets' && (
-                  <label className="text-xs text-slate-300 sm:col-span-2">
+                  <label className="text-xs font-semibold text-slate-300 sm:col-span-2">
                     Gadget Type / Subcategory
                     <select
                       value={inventoryGadgetType}
                       onChange={e => setInventoryGadgetType(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-emerald-500/40 bg-slate-950 px-4 py-2.5 text-sm text-emerald-300 focus:border-emerald-400 focus:outline-none"
+                      className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-cyan-400 focus:outline-none transition-colors"
                     >
                       {gadgetTypeOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                     </select>
@@ -1379,7 +1379,7 @@ ALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_i
                 )}
 
                 {/* 4. Product Title & Model */}
-                <label className="text-xs text-slate-300 sm:col-span-2">
+                <label className="text-xs font-semibold text-slate-300 sm:col-span-2">
                   Product Title & Model Name
                   <input
                     type="text"
@@ -1394,12 +1394,12 @@ ALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_i
                         ? "e.g., iPhone 13 Pro Max · 128GB Sierra Blue or Samsung S22 Ultra"
                         : "e.g., Seagate 2TB USB 3.0 External Hard Drive or Aluminum Foldable Stand"
                     }
-                    className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-cyan-400 focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-cyan-400 focus:outline-none transition-colors"
                   />
                 </label>
 
                 {/* 5. Price in GHS */}
-                <label className="text-xs text-slate-300">
+                <label className="text-xs font-semibold text-slate-300">
                   Retail Price in GHS
                   <input
                     type="number"
@@ -1409,29 +1409,29 @@ ALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_i
                     onChange={e => setInventoryPrice(e.target.value)}
                     required
                     placeholder="3500.00"
-                    className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-cyan-400 focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-cyan-400 focus:outline-none transition-colors"
                   />
                 </label>
 
                 {/* 6. RAM & Storage (Dynamic per category) */}
                 {inventoryCategory === 'laptops' && (
                   <>
-                    <label className="text-xs text-slate-300">
+                    <label className="text-xs font-semibold text-slate-300">
                       Installed RAM
                       <select
                         value={inventoryRam}
                         onChange={e => setInventoryRam(e.target.value)}
-                        className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-cyan-400 focus:outline-none"
+                        className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-cyan-400 focus:outline-none transition-colors"
                       >
                         {laptopRamOptions.map(opt => <option key={opt}>{opt}</option>)}
                       </select>
                     </label>
-                    <label className="text-xs text-slate-300">
+                    <label className="text-xs font-semibold text-slate-300">
                       Storage Drive
                       <select
                         value={inventoryStorage}
                         onChange={e => setInventoryStorage(e.target.value)}
-                        className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-cyan-400 focus:outline-none"
+                        className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-cyan-400 focus:outline-none transition-colors"
                       >
                         {laptopStorageOptions.map(opt => <option key={opt}>{opt}</option>)}
                       </select>
@@ -1441,22 +1441,22 @@ ALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_i
 
                 {inventoryCategory === 'phones' && (
                   <>
-                    <label className="text-xs text-slate-300">
+                    <label className="text-xs font-semibold text-slate-300">
                       Mobile Internal Storage (Space)
                       <select
                         value={inventoryStorage}
                         onChange={e => setInventoryStorage(e.target.value)}
-                        className="mt-1 w-full rounded-lg border border-purple-500/40 bg-slate-950 px-4 py-2.5 text-sm text-purple-300 focus:border-purple-400 focus:outline-none"
+                        className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-cyan-400 focus:outline-none transition-colors"
                       >
                         {phoneStorageOptions.map(opt => <option key={opt}>{opt}</option>)}
                       </select>
                     </label>
-                    <label className="text-xs text-slate-300">
+                    <label className="text-xs font-semibold text-slate-300">
                       Phone RAM
                       <select
                         value={inventoryRam}
                         onChange={e => setInventoryRam(e.target.value)}
-                        className="mt-1 w-full rounded-lg border border-purple-500/40 bg-slate-950 px-4 py-2.5 text-sm text-purple-300 focus:border-purple-400 focus:outline-none"
+                        className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-cyan-400 focus:outline-none transition-colors"
                       >
                         {phoneRamOptions.map(opt => <option key={opt}>{opt}</option>)}
                       </select>
@@ -1465,12 +1465,12 @@ ALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_i
                 )}
 
                 {inventoryCategory === 'gadgets' && (
-                  <label className="text-xs text-slate-300">
+                  <label className="text-xs font-semibold text-slate-300">
                     Storage Capacity (For Hard Drives, SSDs, Power Banks)
                     <select
                       value={inventoryGadgetCapacity}
                       onChange={e => setInventoryGadgetCapacity(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-emerald-500/40 bg-slate-950 px-4 py-2.5 text-sm text-emerald-300 focus:border-emerald-400 focus:outline-none"
+                      className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-cyan-400 focus:outline-none transition-colors"
                     >
                       {gadgetCapacityOptions.map(opt => <option key={opt}>{opt}</option>)}
                     </select>
@@ -1478,7 +1478,7 @@ ALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_i
                 )}
 
                 {/* 7. Image Upload */}
-                <label className="text-xs text-slate-300">
+                <label className="text-xs font-semibold text-slate-300">
                   Product Image (JPG, PNG, WebP)
                   <input
                     type="file"
@@ -1490,7 +1490,7 @@ ALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_i
                 </label>
 
                 {/* 8. Highlights & Specs */}
-                <label className="text-xs text-slate-300 sm:col-span-2">
+                <label className="text-xs font-semibold text-slate-300 sm:col-span-2">
                   Key Specs & Highlights
                   <textarea
                     rows={3}
@@ -1504,7 +1504,7 @@ ALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_i
                         ? "Battery health, camera specs, dual SIM status, condition (in box, pristine), network (5G)..."
                         : "Connectivity, material, dimensions, compatibility, power rating, included accessories..."
                     }
-                    className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-cyan-400 focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-cyan-400 focus:outline-none transition-colors"
                   />
                 </label>
 
@@ -1523,7 +1523,7 @@ ALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_i
                   <button
                     type="submit"
                     disabled={inventoryBusy}
-                    className="inline-flex items-center gap-2 rounded-xl bg-cyan-500 px-6 py-2.5 text-sm font-bold text-black shadow-lg shadow-cyan-500/20 hover:bg-cyan-400 transition-all disabled:opacity-50 cursor-pointer"
+                    className="gkb-primary-btn inline-flex items-center gap-2 rounded-xl bg-cyan-500 px-6 py-2.5 text-sm font-bold text-slate-950 shadow-md shadow-cyan-500/20 hover:bg-cyan-400 transition-all disabled:opacity-50 cursor-pointer"
                   >
                     <PlusCircle className="h-4 w-4" />
                     {inventoryBusy ? 'Publishing…' : `Publish ${inventoryCategory === 'phones' ? 'Phone' : inventoryCategory === 'gadgets' ? 'Gadget' : 'Laptop'} to Store`}

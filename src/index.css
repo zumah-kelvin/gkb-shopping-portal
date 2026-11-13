@@ -2,10 +2,11 @@
 
 .theme-light {
   color-scheme: light;
-  background-color: #f1f5f9;
+  background-color: #f8fafc;
   color: #0f172a;
 }
 
+/* Background overrides for containers */
 .theme-light [class~="bg-slate-950"],
 .theme-light [class*="bg-slate-950/"] {
   background-color: #f1f5f9 !important;
@@ -20,25 +21,28 @@
   background-color: #ffffff !important;
 }
 
-.theme-light [class~="bg-slate-900/50"] {
-  background-color: #f8fafc !important;
+.theme-light [class~="bg-slate-900/50"],
+.theme-light [class~="bg-slate-900/60"],
+.theme-light [class~="bg-slate-900/70"] {
+  background-color: #ffffff !important;
 }
 
 .theme-light [class~="bg-slate-800"],
 .theme-light [class*="bg-slate-800/"] {
-  background-color: #e2e8f0 !important;
+  background-color: #f1f5f9 !important;
 }
 
 .theme-light [class~="bg-slate-700"],
 .theme-light [class*="bg-slate-700/"] {
-  background-color: #cbd5e1 !important;
+  background-color: #e2e8f0 !important;
 }
 
 .theme-light [class*="from-slate-"] {
-  background-image: linear-gradient(to bottom, #ffffff, #f1f5f9) !important;
+  background-image: linear-gradient(to bottom, #ffffff, #f8fafc) !important;
 }
 
-.theme-light [class~="text-white"]:not(.bg-emerald-600):not(.hover\:bg-emerald-500) {
+/* Text color overrides with exclusion for saturated buttons and active tabs */
+.theme-light [class~="text-white"]:not(.keep-white):not(.gkb-primary-btn):not(.gkb-order-btn):not(.gkb-cat-tab-active):not(.gkb-store-tab-active):not(.gkb-subfilter-active):not([class*="bg-emerald-6"]):not([class*="bg-cyan-6"]):not([class*="bg-purple-6"]):not([class*="bg-slate-900"]) {
   color: #0f172a !important;
 }
 
@@ -56,39 +60,42 @@
 }
 
 .theme-light [class~="text-slate-500"] {
-  color: #475569 !important;
+  color: #64748b !important;
 }
 
 .theme-light [class~="text-cyan-300"],
 .theme-light [class~="text-cyan-400"],
 .theme-light [class~="text-cyan-400/70"] {
-  color: #0c5666 !important;
+  color: #0891b2 !important;
 }
 
 .theme-light [class~="text-purple-300"],
 .theme-light [class~="text-purple-400"] {
-  color: #6b21a8 !important;
+  color: #7c3aed !important;
 }
 
-.theme-light [class~="text-emerald-400"] {
-  color: #065f46 !important;
-}
-
+.theme-light [class~="text-emerald-400"],
 .theme-light [class~="text-emerald-300"] {
-  color: #065f46 !important;
+  color: #059669 !important;
 }
 
-.theme-light [class~="text-amber-400"] {
-  color: #713f12 !important;
+.theme-light [class~="text-amber-400"],
+.theme-light [class~="text-amber-300"] {
+  color: #b45309 !important;
+}
+
+.theme-light [class~="text-yellow-300"],
+.theme-light [class~="text-yellow-400"] {
+  color: #d97706 !important;
 }
 
 .theme-light [class~="text-red-300"],
 .theme-light [class~="text-red-400"] {
-  color: #991b1b !important;
+  color: #dc2626 !important;
 }
 
 .theme-light [class~="text-pink-400"] {
-  color: #9d174d !important;
+  color: #db2777 !important;
 }
 
 .theme-light [class~="text-transparent"] {
@@ -97,8 +104,10 @@
   background-image: none !important;
 }
 
-.theme-light [class~="border-slate-800"] {
-  border-color: #cbd5e1 !important;
+/* Borders in light mode */
+.theme-light [class~="border-slate-800"],
+.theme-light [class*="border-slate-800/"] {
+  border-color: #e2e8f0 !important;
 }
 
 .theme-light [class~="border-slate-900"] {
@@ -109,12 +118,156 @@
   border-color: #cbd5e1 !important;
 }
 
-.theme-light input,
+/* Clean, crisp styling for all inputs, selects and textareas */
+.theme-light input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]),
+.theme-light select,
 .theme-light textarea {
-  color: #0f172a;
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.04) !important;
+}
+
+.theme-light input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):focus,
+.theme-light select:focus,
+.theme-light textarea:focus {
+  border-color: #0891b2 !important;
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.15) !important;
 }
 
 .theme-light input::placeholder,
 .theme-light textarea::placeholder {
-  color: #64748b;
+  color: #94a3b8 !important;
+}
+
+.theme-light select option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* File Input */
+.theme-light input[type="file"] {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #475569 !important;
+}
+
+.theme-light input[type="file"]::file-selector-button {
+  background-color: #e0f2fe !important;
+  color: #0369a1 !important;
+  border: 0 !important;
+  font-weight: 600 !important;
+  border-radius: 0.375rem !important;
+}
+
+/* ========================================================
+   HARMONIZED GKB BRAND COMPONENTS IN LIGHT MODE
+   ======================================================== */
+
+/* Category Switcher Tabs (Admin + Storefront) */
+.theme-light .gkb-cat-tab-active,
+.theme-light .gkb-store-tab-active {
+  background-color: #0891b2 !important;
+  color: #ffffff !important;
+  border-color: #0891b2 !important;
+  box-shadow: 0 4px 12px -2px rgba(8, 145, 178, 0.35) !important;
+}
+
+.theme-light .gkb-cat-tab-active *,
+.theme-light .gkb-store-tab-active * {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+}
+
+.theme-light .gkb-cat-tab-inactive,
+.theme-light .gkb-store-tab-inactive {
+  background-color: #ffffff !important;
+  color: #475569 !important;
+  border-color: #cbd5e1 !important;
+}
+
+.theme-light .gkb-cat-tab-inactive:hover,
+.theme-light .gkb-store-tab-inactive:hover {
+  background-color: #f1f5f9 !important;
+  color: #0891b2 !important;
+  border-color: #0891b2 !important;
+}
+
+/* Sub-filter & Brand Pills */
+.theme-light .gkb-subfilter-active {
+  background-color: #0891b2 !important;
+  color: #ffffff !important;
+  border-color: #0891b2 !important;
+}
+
+.theme-light .gkb-subfilter-active * {
+  color: #ffffff !important;
+}
+
+.theme-light .gkb-subfilter-inactive {
+  background-color: #ffffff !important;
+  color: #475569 !important;
+  border-color: #cbd5e1 !important;
+}
+
+.theme-light .gkb-subfilter-inactive:hover {
+  background-color: #f1f5f9 !important;
+  color: #0891b2 !important;
+  border-color: #94a3b8 !important;
+}
+
+/* SQL Helper Pill */
+.theme-light .gkb-sql-helper-btn {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #475569 !important;
+}
+
+.theme-light .gkb-sql-helper-btn:hover {
+  background-color: #e2e8f0 !important;
+  color: #0891b2 !important;
+  border-color: #0891b2 !important;
+}
+
+/* Primary Action Buttons */
+.theme-light .gkb-primary-btn {
+  background-color: #0891b2 !important;
+  color: #ffffff !important;
+  border-color: #0891b2 !important;
+  box-shadow: 0 4px 14px rgba(8, 145, 178, 0.3) !important;
+}
+
+.theme-light .gkb-primary-btn:hover {
+  background-color: #0e7490 !important;
+}
+
+.theme-light .gkb-primary-btn * {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+}
+
+/* Order Now Action Button */
+.theme-light .gkb-order-btn {
+  background-image: linear-gradient(to right, #0891b2, #7c3aed) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(8, 145, 178, 0.25) !important;
+}
+
+.theme-light .gkb-order-btn * {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+}
+
+/* Header Active Navigation Pills */
+.theme-light nav button[class*="bg-cyan-500/10"] {
+  background-color: #e0f2fe !important;
+  color: #0369a1 !important;
+  border-color: #7dd3fc !important;
+}
+
+.theme-light nav button[class*="bg-purple-500/20"] {
+  background-color: #f3e8ff !important;
+  color: #6b21a8 !important;
+  border-color: #d8b4fe !important;
 }
