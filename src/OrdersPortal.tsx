@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { CheckCircle, Clock3, Package, RefreshCw, ShoppingBag, ArrowLeft, MessageSquare, User, XCircle, AlertTriangle, Lock } from 'lucide-react';
+import { CheckCircle, Clock3, Package, RefreshCw, ShoppingBag, ArrowLeft, MessageSquare, User, XCircle, AlertTriangle, Lock, Cpu, Copy, Check, Sparkles } from 'lucide-react';
 import { relaySupabase } from './supabase';
 
 type OrderStatus = 'pending' | 'processing' | 'delivered' | 'picked_up' | 'cancelled';
@@ -58,7 +58,14 @@ function formatDate(value: string): string {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'An unexpected order error occurred.';
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error !== null) {
+    const err = error as Record<string, unknown>;
+    if (typeof err.message === 'string') return err.message;
+    if (typeof err.error_description === 'string') return err.error_description;
+    if (typeof err.details === 'string') return err.details;
+  }
+  return 'An unexpected order error occurred.';
 }
 
 export default function OrdersPortal({
@@ -83,6 +90,8 @@ export default function OrdersPortal({
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showSqlHelper, setShowSqlHelper] = useState(false);
+  const [sqlCopied, setSqlCopied] = useState(false);
   const [formError, setFormError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [saving, setSaving] = useState(false);
@@ -332,16 +341,30 @@ export default function OrdersPortal({
     if (!relaySupabase || order.status === nextStatus) return;
     setUpdatingOrderId(order.id);
     setError('');
+    const updatedAt = new Date().toISOString();
     try {
       const { error: updateError } = await relaySupabase
         .from('gkb_orders')
-        .update({ status: nextStatus, status_updated_at: new Date().toISOString() })
+        .update({ status: nextStatus, status_updated_at: updatedAt })
         .eq('id', order.id);
 
       if (updateError) throw updateError;
-      await loadOrders();
+      
+      // Update local state immediately
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: nextStatus, status_updated_at: updatedAt } : o));
     } catch (updateError) {
-      setError(`Order status could not be updated: ${errorMessage(updateError)}`);
+      const msg = errorMessage(updateError);
+      setError(`Order status could not be updated in Supabase database: ${msg}`);
+      if (
+        msg.toLowerCase().includes('check constraint') ||
+        msg.toLowerCase().includes('status_check') ||
+        msg.toLowerCase().includes('violates') ||
+        msg.toLowerCase().includes('permission') ||
+        msg.toLowerCase().includes('policy') ||
+        msg.toLowerCase().includes('row-level security')
+      ) {
+        setShowSqlHelper(true);
+      }
     } finally {
       setUpdatingOrderId('');
     }
@@ -522,11 +545,23 @@ export default function OrdersPortal({
 
         {/* User state badge / Sign in prompt */}
         {user ? (
-          <div className="rounded-xl border border-cyan-500/30 bg-slate-900/80 px-4 py-2 text-right">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-cyan-400">Signed In</span>
-            <p className="text-xs font-bold text-white">
-              {[user.firstName, user.lastName].filter(Boolean).join(' ') || user.email}
-            </p>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setShowSqlHelper(v => !v)}
+                className="gkb-sql-helper-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800/80 text-slate-300 hover:text-cyan-300 hover:border-cyan-500/40 text-xs font-mono font-medium transition-all cursor-pointer"
+              >
+                <Cpu className="h-3.5 w-3.5" />
+                {showSqlHelper ? 'Hide SQL Fix' : 'Supabase SQL Fix'}
+              </button>
+            )}
+            <div className="rounded-xl border border-cyan-500/30 bg-slate-900/80 px-4 py-2 text-right">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-cyan-400">Signed In</span>
+              <p className="text-xs font-bold text-white">
+                {[user.firstName, user.lastName].filter(Boolean).join(' ') || user.email}
+              </p>
+            </div>
           </div>
         ) : (
           onOpenLogin && (
@@ -545,6 +580,41 @@ export default function OrdersPortal({
         <p role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
           {error}
         </p>
+      )}
+
+      {/* Optional SQL Migration Card for Admin Order Cancellation */}
+      {showSqlHelper && (
+        <div className="p-4 sm:p-5 rounded-2xl border border-cyan-500/40 bg-slate-900/90 text-left space-y-3 animate-fadeIn">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <p className="text-xs font-mono text-cyan-300 font-bold flex items-center gap-1.5">
+              <Sparkles className="h-4 w-4 text-cyan-400" /> Supabase Database Update for Order Cancellation
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                const sql = `-- 1. Allow 'cancelled' in gkb_orders status check constraint:\nALTER TABLE public.gkb_orders DROP CONSTRAINT IF EXISTS gkb_orders_status_check;\nALTER TABLE public.gkb_orders ADD CONSTRAINT gkb_orders_status_check \n  CHECK (status in ('pending', 'processing', 'delivered', 'picked_up', 'cancelled'));\n\n-- 2. Ensure zumkel023@gmail.com is permanently authorized as Admin in Supabase RLS:\nINSERT INTO public.gkb_user_roles (user_id, role)\nSELECT id, 'admin'\nFROM auth.users\nWHERE email = 'zumkel023@gmail.com'\nON CONFLICT (user_id) DO UPDATE SET role = 'admin';\n\n-- 3. Upgrade is_gkb_admin() function so admin email is always recognized:\nCREATE OR REPLACE FUNCTION public.is_gkb_admin()\nRETURNS boolean\nLANGUAGE sql\nSTABLE\nSECURITY DEFINER\nSET search_path = ''\nAS $$\n  SELECT EXISTS (\n    SELECT 1\n    FROM public.gkb_user_roles as roles\n    WHERE roles.user_id = (SELECT auth.uid())\n      AND roles.role = 'admin'\n  ) OR (\n    (SELECT auth.jwt() ->> 'email') = 'zumkel023@gmail.com'\n  );\n$$;\n\n-- 4. Grant update permissions:\nGRANT UPDATE (status, status_updated_at) ON TABLE public.gkb_orders TO authenticated;`;
+                navigator.clipboard.writeText(sql);
+                setSqlCopied(true);
+                setTimeout(() => setSqlCopied(false), 2500);
+              }}
+              className="px-3 py-1.5 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-xs font-mono font-bold hover:bg-cyan-500/30 flex items-center gap-1.5 cursor-pointer self-start sm:self-auto transition-all"
+            >
+              {sqlCopied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+              {sqlCopied ? 'Copied SQL Script!' : 'Copy SQL Script'}
+            </button>
+          </div>
+          <p className="text-xs text-slate-300">
+            The Supabase Postgres database has a check constraint on <code>gkb_orders.status</code> that needs to be updated to permit <code>'cancelled'</code>. Run this SQL once in your Supabase SQL Editor:
+          </p>
+          <pre className="text-[11px] font-mono text-cyan-200 bg-slate-950 p-3 rounded-lg border border-slate-800 overflow-x-auto">
+{`ALTER TABLE public.gkb_orders DROP CONSTRAINT IF EXISTS gkb_orders_status_check;
+ALTER TABLE public.gkb_orders ADD CONSTRAINT gkb_orders_status_check 
+  CHECK (status in ('pending', 'processing', 'delivered', 'picked_up', 'cancelled'));`}
+          </pre>
+          <p className="text-[11px] text-slate-400">
+            *Click <strong>"Copy SQL Script"</strong> above, open your Supabase SQL Editor, paste and click <strong>Run</strong>.
+          </p>
+        </div>
       )}
 
       {/* ================= ORDER FORM (Non-Admin) ================= */}
