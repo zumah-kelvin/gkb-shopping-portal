@@ -42,7 +42,7 @@
 }
 
 /* Text color overrides with exclusion for saturated buttons and active tabs */
-.theme-light [class~="text-white"]:not(.keep-white):not(.gkb-primary-btn):not(.gkb-order-btn):not(.gkb-cat-tab-active):not(.gkb-store-tab-active):not(.gkb-subfilter-active):not([class*="bg-emerald-6"]):not([class*="bg-cyan-6"]):not([class*="bg-purple-6"]):not([class*="bg-slate-900"]) {
+.theme-light [class~="text-white"]:not(.keep-white):not(.gkb-primary-btn):not(.gkb-order-btn):not(.gkb-cat-tab-active):not(.gkb-store-tab-active):not(.gkb-subfilter-active):not([class*="bg-emerald"]):not([class*="bg-cyan"]):not([class*="bg-purple"]):not([class*="bg-slate-900"]):not([class*="bg-red"]) {
   color: #0f172a !important;
 }
 
