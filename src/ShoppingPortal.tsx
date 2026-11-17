@@ -7,7 +7,7 @@ import {
   User, Lock, LogOut, CheckCircle, AlertTriangle, ArrowRight,
   Sun, Moon, Zap, Tag, RefreshCw, PlusCircle, Search, Filter,
   Smartphone, HardDrive, Layers, Cpu, Copy, Check, Info,
-  SlidersHorizontal, Sparkles, Folder
+  SlidersHorizontal, Sparkles, Folder, Pencil, DollarSign, X
 } from 'lucide-react';
 
 export type ProductCategory = 'laptops' | 'phones' | 'gadgets';
@@ -333,6 +333,14 @@ export default function ShoppingPortal() {
     () => window.localStorage.getItem('gkb-theme') === 'light'
   );
   const [user, setUser] = useState<UserType | null>(null);
+  const isAdmin = Boolean(user && (user.role === 'admin' || user.email?.toLowerCase() === 'zumkel023@gmail.com'));
+
+  // Price editing state (Strictly Admin Only)
+  const [editingPriceItemId, setEditingPriceItemId] = useState<string | null>(null);
+  const [editPriceValue, setEditPriceValue] = useState<string>('');
+  const [priceSavingId, setPriceSavingId] = useState<string | null>(null);
+  const [priceEditError, setPriceEditError] = useState<string>('');
+  const [priceEditSuccess, setPriceEditSuccess] = useState<string>('');
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -659,7 +667,7 @@ export default function ShoppingPortal() {
 
   // Archive item toggle
   const handleToggleInventoryItem = async (item: InventoryItem) => {
-    if (user?.role !== 'admin' || !relaySupabase) return;
+    if (!isAdmin || !relaySupabase) return;
     try {
       const { data, error } = await relaySupabase
         .from('gkb_inventory_items')
@@ -671,6 +679,68 @@ export default function ShoppingPortal() {
       setInventoryItems(current => current.map(dev => dev.id === item.id ? { ...data, price: Number(data.price), category: item.category, gadgetType: item.gadgetType } as InventoryItem : dev));
     } catch (error) {
       console.error('Failed to update product state:', error);
+    }
+  };
+
+  // Price editing handlers (Strictly Admin Only)
+  const handleStartEditPrice = (item: InventoryItem) => {
+    if (!isAdmin) return;
+    setEditingPriceItemId(item.id);
+    setEditPriceValue(item.price.toString());
+    setPriceEditError('');
+    setPriceEditSuccess('');
+  };
+
+  const handleCancelEditPrice = () => {
+    setEditingPriceItemId(null);
+    setEditPriceValue('');
+    setPriceEditError('');
+  };
+
+  const handleSavePrice = async (item: InventoryItem) => {
+    if (!isAdmin || !relaySupabase) return;
+    const newPrice = parseFloat(editPriceValue);
+    if (isNaN(newPrice) || newPrice <= 0) {
+      setPriceEditError('Please enter a valid positive price in GHS (e.g. 3500.00).');
+      return;
+    }
+    setPriceSavingId(item.id);
+    setPriceEditError('');
+    try {
+      const { data, error } = await relaySupabase
+        .from('gkb_inventory_items')
+        .update({
+          price: newPrice,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', item.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setInventoryItems(current =>
+        current.map(dev =>
+          dev.id === item.id
+            ? ({
+                ...dev,
+                ...data,
+                price: Number(data.price),
+                category: dev.category,
+                gadgetType: dev.gadgetType
+              } as InventoryItem)
+            : dev
+        )
+      );
+      setEditingPriceItemId(null);
+      setPriceEditSuccess(`Price for "${item.title}" successfully updated to GHS ${newPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}!`);
+      setTimeout(() => setPriceEditSuccess(''), 4000);
+    } catch (err: unknown) {
+      console.error('Failed to update price:', err);
+      const msg = err instanceof Error ? err.message : (typeof err === 'object' && err !== null && 'message' in err) ? String((err as { message: unknown }).message) : 'Failed to update price in Supabase.';
+      setPriceEditError(msg);
+    } finally {
+      setPriceSavingId(null);
     }
   };
 
@@ -710,7 +780,7 @@ export default function ShoppingPortal() {
 
   // Filter products by category, gadgetType, search, and brand
   const displayItems = inventoryItems.filter(item => {
-    if (user?.role !== 'admin' && !item.active) return false;
+    if (!isAdmin && !item.active) return false;
     const category = item.category || parseCategory(item);
     const matchesCategory = selectedCategory === 'all' || category === selectedCategory;
 
@@ -783,7 +853,7 @@ export default function ShoppingPortal() {
             >
               Order & Track
             </button>
-            {user?.role === 'admin' && (
+            {isAdmin && (
               <button
                 type="button"
                 onClick={() => setActiveTab('admin-inventory')}
@@ -860,7 +930,7 @@ export default function ShoppingPortal() {
           >
             Order & Track
           </button>
-          {user?.role === 'admin' && (
+          {isAdmin && (
             <button
               type="button"
               onClick={() => setActiveTab('admin-inventory')}
@@ -933,7 +1003,7 @@ export default function ShoppingPortal() {
                   <Layers className="h-4 w-4" />
                   <span>All Items</span>
                   <span className="ml-1 text-[11px] font-mono opacity-80">
-                    ({inventoryItems.filter(i => user?.role === 'admin' || i.active).length})
+                    ({inventoryItems.filter(i => isAdmin || i.active).length})
                   </span>
                 </button>
 
@@ -949,7 +1019,7 @@ export default function ShoppingPortal() {
                   <Laptop className="h-4 w-4" />
                   <span>Laptops & Computers</span>
                   <span className="ml-1 text-[11px] font-mono opacity-80">
-                    ({inventoryItems.filter(i => (user?.role === 'admin' || i.active) && (i.category || parseCategory(i)) === 'laptops').length})
+                    ({inventoryItems.filter(i => (isAdmin || i.active) && (i.category || parseCategory(i)) === 'laptops').length})
                   </span>
                 </button>
 
@@ -965,7 +1035,7 @@ export default function ShoppingPortal() {
                   <Smartphone className="h-4 w-4" />
                   <span>Mobile Phones</span>
                   <span className="ml-1 text-[11px] font-mono opacity-80">
-                    ({inventoryItems.filter(i => (user?.role === 'admin' || i.active) && (i.category || parseCategory(i)) === 'phones').length})
+                    ({inventoryItems.filter(i => (isAdmin || i.active) && (i.category || parseCategory(i)) === 'phones').length})
                   </span>
                 </button>
 
@@ -981,7 +1051,7 @@ export default function ShoppingPortal() {
                   <HardDrive className="h-4 w-4" />
                   <span>Electronic Gadgets</span>
                   <span className="ml-1 text-[11px] font-mono opacity-80">
-                    ({inventoryItems.filter(i => (user?.role === 'admin' || i.active) && (i.category || parseCategory(i)) === 'gadgets').length})
+                    ({inventoryItems.filter(i => (isAdmin || i.active) && (i.category || parseCategory(i)) === 'gadgets').length})
                   </span>
                 </button>
               </div>
@@ -1184,12 +1254,65 @@ export default function ShoppingPortal() {
                       </div>
 
                       {/* Footer Actions */}
-                      <div className="border-t border-slate-800/80 p-5 pt-4 flex items-center justify-between">
+                      <div className="border-t border-slate-800/80 p-5 pt-4 flex items-center justify-between gap-2">
                         <div>
                           <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Cash / MoMo Price</p>
-                          <p className="text-xl font-black text-yellow-300">
-                            GHS {item.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </p>
+                          {isAdmin && editingPriceItemId === item.id ? (
+                            <div className="mt-1 flex items-center gap-1.5 animate-fadeIn">
+                              <span className="text-xs font-mono font-bold text-amber-300">GHS</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="1"
+                                value={editPriceValue}
+                                onChange={e => setEditPriceValue(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    void handleSavePrice(item);
+                                  } else if (e.key === 'Escape') {
+                                    handleCancelEditPrice();
+                                  }
+                                }}
+                                className="w-24 rounded border border-cyan-400 bg-slate-900 px-2 py-1 text-xs font-bold text-white focus:outline-none"
+                                autoFocus
+                              />
+                              <button
+                                type="button"
+                                disabled={priceSavingId === item.id}
+                                onClick={() => void handleSavePrice(item)}
+                                className="p-1 rounded bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition-colors disabled:opacity-50 cursor-pointer"
+                                title="Save new price"
+                              >
+                                {priceSavingId === item.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={priceSavingId === item.id}
+                                onClick={handleCancelEditPrice}
+                                className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                                title="Cancel"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <p className="text-xl font-black text-yellow-300">
+                                GHS {item.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </p>
+                              {isAdmin && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEditPrice(item)}
+                                  className="p-1 rounded-md text-slate-400 hover:text-cyan-300 hover:bg-slate-800/60 transition-colors cursor-pointer"
+                                  title="Edit price (Admin only)"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
                         <button
                           type="button"
@@ -1226,7 +1349,7 @@ export default function ShoppingPortal() {
         )}
 
         {/* ================= ADMIN INVENTORY VIEW ================= */}
-        {activeTab === 'admin-inventory' && user?.role === 'admin' && (
+        {activeTab === 'admin-inventory' && isAdmin && (
           <div className="space-y-8 animate-fadeIn">
             <section className="rounded-2xl border border-cyan-500/30 bg-slate-900/70 p-6 sm:p-8">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
@@ -1534,18 +1657,37 @@ ALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_i
 
             {/* Existing Inventory Management Table */}
             <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 sm:p-8 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-bold text-white">Current Listings ({inventoryItems.length})</h3>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-lg font-bold text-white">Current Listings ({inventoryItems.length})</h3>
+                  <p className="text-xs text-slate-400">Manage products, adjust prices as costs change, or toggle active status.</p>
+                </div>
                 <span className="text-xs text-slate-400 font-mono">
                   {inventoryItems.filter(i => (i.category || parseCategory(i)) === 'laptops').length} Laptops · {inventoryItems.filter(i => (i.category || parseCategory(i)) === 'phones').length} Phones · {inventoryItems.filter(i => (i.category || parseCategory(i)) === 'gadgets').length} Gadgets
                 </span>
               </div>
+
+              {priceEditSuccess && (
+                <div className="p-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 text-xs font-semibold flex items-center gap-2 animate-fadeIn">
+                  <CheckCircle className="h-4 w-4 text-emerald-400 shrink-0" />
+                  {priceEditSuccess}
+                </div>
+              )}
+
+              {priceEditError && (
+                <div className="p-3 rounded-xl border border-red-500/40 bg-red-500/10 text-red-300 text-xs font-semibold flex items-center gap-2 animate-fadeIn">
+                  <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
+                  {priceEditError}
+                </div>
+              )}
+
               <div className="divide-y divide-slate-800">
                 {inventoryItems.map(item => {
                   const category = item.category || parseCategory(item);
+                  const isEditingThisPrice = editingPriceItemId === item.id;
                   return (
                     <div key={item.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                      <div>
+                      <div className="flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-bold text-white">{item.title}</span>
                           <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
@@ -1562,22 +1704,82 @@ ALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_i
                           </span>
                         </div>
                         <p className="text-xs text-slate-400 mt-1">
-                          {item.brand} · GHS {item.price.toFixed(2)}
+                          {item.brand} · <span className="font-bold text-amber-300 font-mono">GHS {item.price.toFixed(2)}</span>
                           {category !== 'gadgets' && ` · ${item.ram} RAM · ${item.storage}`}
                           {category === 'gadgets' && item.storage && item.storage !== 'None' && item.storage !== 'N/A' && ` · Capacity: ${item.storage}`}
                         </p>
+
+                        {/* Inline Price Editor when active */}
+                        {isEditingThisPrice && (
+                          <div className="mt-3 flex items-center gap-2 flex-wrap bg-slate-950 p-3 rounded-xl border border-cyan-500/40 animate-fadeIn">
+                            <span className="text-xs font-mono font-bold text-cyan-300 flex items-center gap-1">
+                              <DollarSign className="h-3.5 w-3.5" /> Adjust Price (GHS):
+                            </span>
+                            <div className="relative">
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="1"
+                                value={editPriceValue}
+                                onChange={e => setEditPriceValue(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    void handleSavePrice(item);
+                                  } else if (e.key === 'Escape') {
+                                    handleCancelEditPrice();
+                                  }
+                                }}
+                                placeholder="e.g. 4500.00"
+                                className="w-36 rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-bold text-white focus:border-cyan-400 focus:outline-none"
+                                autoFocus
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              disabled={priceSavingId === item.id}
+                              onClick={() => void handleSavePrice(item)}
+                              className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1.5 cursor-pointer shadow-sm shadow-cyan-500/20"
+                            >
+                              {priceSavingId === item.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                              {priceSavingId === item.id ? 'Saving…' : 'Save Price'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={priceSavingId === item.id}
+                              onClick={handleCancelEditPrice}
+                              className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-all cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        )}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleToggleInventoryItem(item)}
-                        className={`text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors cursor-pointer ${
-                          item.active
-                            ? 'border-amber-500/40 text-amber-300 hover:bg-amber-500/10'
-                            : 'border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10'
-                        }`}
-                      >
-                        {item.active ? 'Archive Listing' : 'Restore Listing'}
-                      </button>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {!isEditingThisPrice && (
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditPrice(item)}
+                            className="text-xs px-3 py-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
+                            title="Edit price of this product"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                            Edit Price
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleInventoryItem(item)}
+                          className={`text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors cursor-pointer ${
+                            item.active
+                              ? 'border-amber-500/40 text-amber-300 hover:bg-amber-500/10'
+                              : 'border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10'
+                          }`}
+                        >
+                          {item.active ? 'Archive Listing' : 'Restore Listing'}
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
