@@ -383,6 +383,13 @@ export default function ShoppingPortal() {
   const [inventoryGadgetCapacity, setInventoryGadgetCapacity] = useState(gadgetCapacityOptions[0]);
   const [inventoryImage, setInventoryImage] = useState<File | null>(null);
 
+  // Smart WhatsApp / Supplier Text Parser State
+  const [smartParseText, setSmartParseText] = useState('');
+  const [smartParseSuccess, setSmartParseSuccess] = useState<string | null>(null);
+  const [smartParseDetails, setSmartParseDetails] = useState<string[]>([]);
+  const [smartParseError, setSmartParseError] = useState<string | null>(null);
+  const [showSmartParser, setShowSmartParser] = useState(true);
+
   useEffect(() => {
     window.localStorage.setItem('gkb-theme', isLightMode ? 'light' : 'dark');
   }, [isLightMode]);
@@ -775,6 +782,216 @@ export default function ShoppingPortal() {
       setInventoryGadgetType(gadgetTypeOptions[0]);
       setInventoryGadgetCapacity(gadgetCapacityOptions[5]); // 1TB
       setInventoryRam('N/A');
+    }
+  };
+
+  // Smart Analyzer for WhatsApp broadcasts, supplier text, and raw specs
+  const handleSmartParseSpecs = () => {
+    if (!smartParseText.trim()) {
+      setSmartParseError('Please paste some product specs or broadcast text first.');
+      return;
+    }
+    setSmartParseError(null);
+    setSmartParseSuccess(null);
+    setSmartParseDetails([]);
+
+    try {
+      const rawLines = smartParseText
+        .split(/\r?\n/)
+        .map(l => l.trim())
+        .filter(Boolean);
+
+      if (rawLines.length === 0) {
+        setSmartParseError('No text lines found to analyze.');
+        return;
+      }
+
+      const cleanLine = (s: string) => s.replace(/^[*_~•\-\s]+|[*_~•\-\s]+$/g, '').trim();
+      const fullLower = smartParseText.toLowerCase();
+
+      // 1. Detect Category
+      let detectedCategory: ProductCategory = 'laptops';
+      const isPhone = /\b(iphone|galaxy\s*[as]\d|redmi|infinix|tecno|pixel|huawei|oppo|vivo|oneplus|dual\s*sim|battery\s*health|ios)\b/i.test(fullLower);
+      const isGadget = /\b(external\s*hard\s*drive|power\s*bank|portable\s*charger|cooling\s*pad|docking\s*station|wireless\s*mouse|wireless\s*keyboard|bluetooth\s*speaker|earbuds|headphones|smart\s*iot|smart\s*relay)\b/i.test(fullLower);
+      const isLaptop = /\b(laptop|notebook|ultrabook|precision|thinkpad|elitebook|latitude|probook|macbook|x360|convertible|intel|core\s*i[3579]|ryzen|ddr[345]|touchscreen|fhd|ips|workstation)\b/i.test(fullLower);
+
+      if (isLaptop) {
+        detectedCategory = 'laptops';
+      } else if (isPhone) {
+        detectedCategory = 'phones';
+      } else if (isGadget) {
+        detectedCategory = 'gadgets';
+      }
+
+      // 2. Detect Brand
+      let detectedBrand = 'Other (Custom Brand)';
+      let detectedCustomBrand = '';
+
+      const brandMatches: Array<{ brand: string; test: RegExp; category?: ProductCategory }> = [
+        { brand: 'Dell', test: /\b(dell|precision|latitude|xps|inspiron|vostro|alienware)\b/i, category: 'laptops' },
+        { brand: 'HP', test: /\b(hp|hewlett|elitebook|probook|omen|pavilion|spectre|envy)\b/i, category: 'laptops' },
+        { brand: 'Lenovo', test: /\b(lenovo|thinkpad|ideapad|legion|yoga)\b/i, category: 'laptops' },
+        { brand: 'Apple', test: /\b(macbook|imac|mac\s*mini|apple\s*silicon|m[1234])\b/i, category: 'laptops' },
+        { brand: 'Apple (iPhone)', test: /\b(iphone|apple)\b/i, category: 'phones' },
+        { brand: 'Samsung', test: /\b(samsung|galaxy)\b/i },
+        { brand: 'Asus', test: /\b(asus|zenbook|vivobook|rog|tuf)\b/i, category: 'laptops' },
+        { brand: 'Acer', test: /\b(acer|aspire|predator|nitro|swift)\b/i, category: 'laptops' },
+        { brand: 'Toshiba', test: /\b(toshiba|dynabook)\b/i, category: 'laptops' },
+        { brand: 'MSI', test: /\b(msi)\b/i, category: 'laptops' },
+        { brand: 'Microsoft Surface', test: /\b(surface|microsoft\s*surface)\b/i, category: 'laptops' },
+        { brand: 'Tecno', test: /\b(tecno|camon|spark|phantom)\b/i, category: 'phones' },
+        { brand: 'Infinix', test: /\b(infinix|hot|note|zero)\b/i, category: 'phones' },
+        { brand: 'Google Pixel', test: /\b(pixel|google\s*pixel)\b/i, category: 'phones' },
+        { brand: 'Xiaomi / Redmi', test: /\b(xiaomi|redmi|poco)\b/i, category: 'phones' },
+        { brand: 'Huawei', test: /\b(huawei)\b/i },
+        { brand: 'Oppo', test: /\b(oppo)\b/i, category: 'phones' },
+        { brand: 'Vivo', test: /\b(vivo)\b/i, category: 'phones' },
+        { brand: 'OnePlus', test: /\b(oneplus)\b/i, category: 'phones' },
+      ];
+
+      for (const bm of brandMatches) {
+        if (bm.test.test(fullLower)) {
+          detectedBrand = bm.brand;
+          if (bm.category && !isLaptop) {
+            detectedCategory = bm.category;
+          }
+          break;
+        }
+      }
+
+      // 3. Detect Price (typically near bottom or labeled with currency)
+      let detectedPrice = '';
+      let priceLineIndex = -1;
+
+      // Bottom-up search for standalone or formatted numbers
+      for (let i = rawLines.length - 1; i >= 0; i--) {
+        const lineClean = cleanLine(rawLines[i]);
+        const priceMatch = lineClean.match(/^(?:(?:ghs|gh₵|gh|cedis|price|¢)[:\s]*)?([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{3,6})(?:\.00|\/-)?(?:\s*(?:ghs|gh₵|gh|cedis|¢))?$/i);
+        if (priceMatch) {
+          const val = priceMatch[1].replace(/,/g, '');
+          const num = parseFloat(val);
+          if (!isNaN(num) && num >= 50 && num <= 250000) {
+            detectedPrice = val;
+            priceLineIndex = i;
+            break;
+          }
+        }
+      }
+
+      // Fallback search anywhere in text for "GHS 4490" etc.
+      if (!detectedPrice) {
+        const labeledMatch = fullLower.match(/(?:ghs|gh₵|gh|cedis|price|¢)[:\s]*([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{3,6})/i);
+        if (labeledMatch) {
+          detectedPrice = labeledMatch[1].replace(/,/g, '');
+        }
+      }
+
+      // 4. Detect RAM
+      let detectedRam = '';
+      const ramMatch = fullLower.match(/\b(4|6|8|12|16|24|32|64)\s*(?:gb|g)\s*(?:ddr[345]|ram|memory|lpddr[45])?\b/i);
+      if (ramMatch) {
+        const ramNum = ramMatch[1];
+        if (detectedCategory === 'laptops') {
+          const match = laptopRamOptions.find(o => o.startsWith(`${ramNum}GB`));
+          detectedRam = match || `${ramNum}GB`;
+        } else if (detectedCategory === 'phones') {
+          const match = phoneRamOptions.find(o => o.startsWith(`${ramNum}GB`));
+          detectedRam = match || `${ramNum}GB`;
+        }
+      }
+
+      // 5. Detect Storage
+      let detectedStorage = '';
+      const storageMatch = fullLower.match(/\b(64|128|256|512)\s*gb\b|\b([124])\s*tb\b/i);
+      if (storageMatch) {
+        const cleanStorage = storageMatch[0].toUpperCase().replace(/\s+/g, '');
+        if (detectedCategory === 'laptops') {
+          const match = laptopStorageOptions.find(o => o === cleanStorage || o.startsWith(cleanStorage));
+          detectedStorage = match || cleanStorage;
+        } else if (detectedCategory === 'phones') {
+          const match = phoneStorageOptions.find(o => o === cleanStorage || o.startsWith(cleanStorage));
+          detectedStorage = match || cleanStorage;
+        }
+      }
+
+      // 6. Detect Title / Model (First non-empty line that isn't just the price)
+      let candidateTitle = '';
+      for (let i = 0; i < rawLines.length; i++) {
+        if (i === priceLineIndex) continue;
+        const l = cleanLine(rawLines[i]);
+        if (l.length >= 3 && !/^\d+$/.test(l)) {
+          candidateTitle = l;
+          break;
+        }
+      }
+
+      const formatTitleWord = (w: string) => {
+        const wl = w.toLowerCase();
+        if (/^(i[3579]|ssd|hdd|ram|fhd|uhd|oled|ips|4k|2k|x360|m[1234]|ddr[345]|gb|tb)$/i.test(wl)) return w.toUpperCase();
+        if (/^\d+[a-z]?$/i.test(wl)) return w.toUpperCase();
+        return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+      };
+
+      let finalTitle = candidateTitle
+        .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
+        .split(/\s+/)
+        .filter(Boolean)
+        .map(formatTitleWord)
+        .join(' ');
+
+      if (!finalTitle) {
+        finalTitle = `${detectedBrand} Product`;
+      }
+
+      // 7. Compile Highlights
+      const highlightsList: string[] = [];
+      for (let i = 0; i < rawLines.length; i++) {
+        if (i === priceLineIndex) continue;
+        const cl = cleanLine(rawLines[i]);
+        if (cl === cleanLine(candidateTitle)) continue;
+        if (detectedPrice && cl === detectedPrice) continue;
+        if (cl.length > 1) {
+          highlightsList.push(cl);
+        }
+      }
+      const finalHighlights = highlightsList.join(' · ');
+
+      // Apply values to Form State
+      setInventoryCategory(detectedCategory);
+
+      const currentBrandList = detectedCategory === 'laptops'
+        ? laptopBrandOptions
+        : detectedCategory === 'phones'
+        ? phoneBrandOptions
+        : gadgetBrandOptions;
+
+      if (currentBrandList.includes(detectedBrand)) {
+        setInventoryBrandSelect(detectedBrand);
+        setInventoryCustomBrand('');
+      } else {
+        setInventoryBrandSelect('Other (Custom Brand)');
+        setInventoryCustomBrand(detectedCustomBrand || detectedBrand !== 'Other (Custom Brand)' ? detectedBrand : '');
+      }
+
+      setInventoryTitle(finalTitle);
+      if (detectedPrice) setInventoryPrice(detectedPrice);
+      if (detectedRam) setInventoryRam(detectedRam);
+      if (detectedStorage) setInventoryStorage(detectedStorage);
+      if (finalHighlights) setInventoryHighlights(finalHighlights);
+
+      const details: string[] = [];
+      details.push(`Category: ${detectedCategory.toUpperCase()}`);
+      details.push(`Brand: ${detectedBrand}`);
+      details.push(`Model: ${finalTitle}`);
+      if (detectedPrice) details.push(`Price: GHS ${Number(detectedPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}`);
+      if (detectedRam) details.push(`RAM: ${detectedRam}`);
+      if (detectedStorage) details.push(`Storage: ${detectedStorage}`);
+
+      setSmartParseDetails(details);
+      setSmartParseSuccess(`Auto-filled ${details.length} fields! Please review the form, attach a product photo, and upload.`);
+    } catch (err: unknown) {
+      console.error('Smart parsing failed:', err);
+      setSmartParseError('Could not parse text. Please check the format and try again.');
     }
   };
 
@@ -1402,6 +1619,128 @@ ALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_i
                 </div>
               )}
               
+              {/* ================= SMART WHATSAPP SPEC ANALYZER ================= */}
+              <div className="mt-6 rounded-2xl border border-cyan-500/40 bg-gradient-to-br from-slate-900/95 via-cyan-950/20 to-slate-900/95 p-5 sm:p-6 shadow-xl shadow-cyan-950/30">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-800/80">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-300 shrink-0">
+                      <Sparkles className="h-5 w-5 animate-pulse text-cyan-300" />
+                    </div>
+                    <div>
+                      <h4 className="text-base font-bold text-white flex items-center gap-2">
+                        Smart Text & WhatsApp Spec Auto-Fill
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-semibold uppercase tracking-wider">
+                          Instant Parser
+                        </span>
+                      </h4>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Paste supplier broadcasts, WhatsApp dealer lists, or raw specs. The system extracts brand, model, RAM, storage, price, and highlights automatically!
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowSmartParser(v => !v)}
+                    className="text-xs font-mono text-slate-400 hover:text-cyan-300 flex items-center gap-1 transition-colors self-start sm:self-auto cursor-pointer"
+                  >
+                    {showSmartParser ? 'Collapse Analyzer ▲' : 'Expand Analyzer ▼'}
+                  </button>
+                </div>
+
+                {showSmartParser && (
+                  <div className="space-y-3.5 animate-fadeIn">
+                    <div className="relative">
+                      <textarea
+                        rows={5}
+                        value={smartParseText}
+                        onChange={e => setSmartParseText(e.target.value)}
+                        placeholder={"Paste WhatsApp broadcast text or product specs here, e.g.:\n*DELL PRECISION 13 7359*\n*Intel core i7* 🔥\n*6Th Generation*\n*256GB SSD*\n*16GB DDR4 Ram*\n*Touchscreen*✅\n*X360 convertible*\n*Keyboard Light* 💡\n13.3FHD\n*Stylus Pen 🖊️*\nDolby audio ✅\nWebcam\nBluetooth\nWiFi\n\n4490"}
+                        className="w-full rounded-xl border border-slate-700 bg-slate-950/90 px-4 py-3 text-xs sm:text-sm font-mono text-slate-100 placeholder:text-slate-500 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 focus:outline-none transition-all leading-relaxed"
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <button
+                        type="button"
+                        onClick={handleSmartParseSpecs}
+                        disabled={!smartParseText.trim()}
+                        className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-slate-950 text-xs sm:text-sm font-extrabold flex items-center gap-2 shadow-md shadow-cyan-500/20 cursor-pointer disabled:opacity-50 transition-all"
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        ⚡ Analyze & Auto-Fill Form
+                      </button>
+
+                      {smartParseText && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSmartParseText('');
+                            setSmartParseSuccess(null);
+                            setSmartParseError(null);
+                            setSmartParseDetails([]);
+                          }}
+                          className="px-3 py-2 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-300 text-xs font-medium cursor-pointer transition-all"
+                        >
+                          Clear
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSmartParseText(`*DELL PRECISION 13 7359*
+*Intel core i7* 🔥
+*6Th Generation*
+*256GB SSD*
+*16GB DDR4 Ram*
+*Touchscreen*✅
+*X360 convertible*
+*Keyboard Light* 💡 
+13.3FHD 
+*Stylus Pen 🖊️* 
+Dolby audio ✅
+Webcam 
+Bluetooth 
+WiFi
+
+4490`);
+                          setSmartParseError(null);
+                        }}
+                        className="text-[11px] font-mono text-cyan-400/80 hover:text-cyan-300 underline ml-auto cursor-pointer"
+                      >
+                        Load Dell Precision Example
+                      </button>
+                    </div>
+
+                    {smartParseError && (
+                      <div className="p-3.5 rounded-xl bg-rose-950/40 border border-rose-500/40 text-rose-300 text-xs font-mono flex items-center gap-2 animate-fadeIn">
+                        <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
+                        <span>{smartParseError}</span>
+                      </div>
+                    )}
+
+                    {smartParseSuccess && (
+                      <div className="p-4 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 text-xs font-mono space-y-2 animate-fadeIn">
+                        <p className="font-bold flex items-center gap-2">
+                          <Check className="h-4 w-4 text-emerald-400 shrink-0" />
+                          <span>{smartParseSuccess}</span>
+                        </p>
+                        {smartParseDetails.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            {smartParseDetails.map((detail, idx) => (
+                              <span key={idx} className="px-2.5 py-1 rounded-lg bg-slate-900/90 border border-slate-700/80 text-[11px] text-slate-200 font-semibold shadow-xs">
+                                {detail}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <form onSubmit={handleAddInventoryItem} className="mt-6 grid gap-4 sm:grid-cols-2">
                 {/* 1. Main Category Dropdown */}
                 <div className="sm:col-span-2">
