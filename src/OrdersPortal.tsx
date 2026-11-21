@@ -343,28 +343,32 @@ export default function OrdersPortal({
     setError('');
     const updatedAt = new Date().toISOString();
     try {
-      const { error: updateError } = await relaySupabase
+      let { error: updateError } = await relaySupabase
         .from('gkb_orders')
         .update({ status: nextStatus, status_updated_at: updatedAt })
         .eq('id', order.id);
 
-      if (updateError) throw updateError;
+      if (updateError && String(updateError.message || '').includes('status_updated_at')) {
+        const retry = await relaySupabase
+          .from('gkb_orders')
+          .update({ status: nextStatus })
+          .eq('id', order.id);
+        updateError = retry.error;
+      }
+
+      if (updateError) {
+        const msg = errorMessage(updateError);
+        setError(`Database warning: ${msg}. Status was applied to your session. Click 'Supabase SQL Fix' above to permanently allow '${nextStatus}' in database.`);
+        setShowSqlHelper(true);
+      }
       
-      // Update local state immediately
+      // Update local state immediately so admin is never stuck
       setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: nextStatus, status_updated_at: updatedAt } : o));
     } catch (updateError) {
       const msg = errorMessage(updateError);
-      setError(`Order status could not be updated in Supabase database: ${msg}`);
-      if (
-        msg.toLowerCase().includes('check constraint') ||
-        msg.toLowerCase().includes('status_check') ||
-        msg.toLowerCase().includes('violates') ||
-        msg.toLowerCase().includes('permission') ||
-        msg.toLowerCase().includes('policy') ||
-        msg.toLowerCase().includes('row-level security')
-      ) {
-        setShowSqlHelper(true);
-      }
+      setError(`Notice: Status updated locally. Run 'Supabase SQL Fix' to persist remotely: ${msg}`);
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: nextStatus, status_updated_at: updatedAt } : o));
+      setShowSqlHelper(true);
     } finally {
       setUpdatingOrderId('');
     }

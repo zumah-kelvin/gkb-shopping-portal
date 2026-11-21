@@ -7,19 +7,21 @@ import {
   User, Lock, LogOut, CheckCircle, AlertTriangle, ArrowRight,
   Sun, Moon, Zap, Tag, RefreshCw, PlusCircle, Search, Filter,
   Smartphone, HardDrive, Layers, Cpu, Copy, Check, Info,
-  SlidersHorizontal, Sparkles, Folder, Pencil, DollarSign, X
+  SlidersHorizontal, Sparkles, Folder, Pencil, DollarSign, X,
+  Store, BadgeCheck, Building
 } from 'lucide-react';
 
 export type ProductCategory = 'laptops' | 'phones' | 'gadgets';
 
 type UserType = {
   id: string;
-  role: 'admin' | 'client';
+  role: 'admin' | 'vendor' | 'client';
   email: string;
   firstName: string;
   lastName: string;
   phone: string;
   location: string;
+  businessName?: string;
 };
 
 type InventoryItem = {
@@ -34,6 +36,10 @@ type InventoryItem = {
   active: boolean;
   category?: ProductCategory;
   gadgetType?: string;
+  vendorId?: string;
+  vendorName?: string;
+  vendorPhone?: string;
+  isOfficial?: boolean;
 };
 
 // ================= BRAND & SPEC PRESETS =================
@@ -122,9 +128,46 @@ export function parseGadgetType(highlights: string): string {
   return 'Electronic Gadget';
 }
 
-// Clean highlights text by stripping the internal metadata tag for display
+// Clean highlights text by stripping internal metadata tags for display
 export function cleanHighlights(text: string): string {
-  return text.replace(/\[Category:[^\]]+\]\s*/g, '').trim();
+  return text
+    .replace(/\[Category:[^\]]+\]\s*/g, '')
+    .replace(/\[Vendor:[^\]]+\]\s*/g, '')
+    .trim();
+}
+
+// Vendor parsing helper for multi-vendor marketplace
+export function parseVendor(item: { highlights?: string; vendor_id?: string; vendor_name?: string; vendor_phone?: string; [key: string]: any }): {
+  vendorId?: string;
+  vendorName: string;
+  vendorPhone: string;
+  isOfficial: boolean;
+} {
+  if (item.vendor_name) {
+    const isGkb = item.vendor_name.toLowerCase().includes('gkb') || item.vendor_name.toLowerCase().includes('official');
+    return {
+      vendorId: item.vendor_id,
+      vendorName: item.vendor_name,
+      vendorPhone: item.vendor_phone || '0552117787',
+      isOfficial: isGkb
+    };
+  }
+  const match = item.highlights?.match(/\[Vendor:\s*([^|\]]+)(?:\s*\|\s*Phone:\s*([^|\]]+))?(?:\s*\|\s*UID:\s*([^|\]]+))?\]/i);
+  if (match) {
+    const vName = match[1]?.trim() || 'Verified Vendor';
+    const isGkb = vName.toLowerCase().includes('gkb') || vName.toLowerCase().includes('official');
+    return {
+      vendorName: vName,
+      vendorPhone: match[2]?.trim() || '0552117787',
+      vendorId: match[3]?.trim(),
+      isOfficial: isGkb
+    };
+  }
+  return {
+    vendorName: 'GKB Official Store',
+    vendorPhone: '0552117787',
+    isOfficial: true
+  };
 }
 
 // ================= INITIAL DEMO PRODUCTS =================
@@ -334,8 +377,22 @@ export default function ShoppingPortal() {
   );
   const [user, setUser] = useState<UserType | null>(null);
   const isAdmin = Boolean(user && (user.role === 'admin' || user.email?.toLowerCase() === 'zumkel023@gmail.com'));
+  const isVendor = Boolean(user && user.role === 'vendor');
+  const canManageInventory = isAdmin || isVendor;
 
-  // Price editing state (Strictly Admin Only)
+  // Multi-Vendor filter on catalog
+  const [selectedVendorFilter, setSelectedVendorFilter] = useState('all');
+
+  // Multi-Vendor registration state
+  const [signupAccountType, setSignupAccountType] = useState<'client' | 'vendor'>('client');
+  const [signupBusinessName, setSignupBusinessName] = useState('');
+
+  // Admin: assign product to vendor or GKB Official
+  const [vendorAssignment, setVendorAssignment] = useState('GKB Official Store');
+  const [vendorCustomAssignName, setVendorCustomAssignName] = useState('');
+  const [vendorCustomAssignPhone, setVendorCustomAssignPhone] = useState('');
+
+  // Price editing state (Admin or Item Owner Vendor)
   const [editingPriceItemId, setEditingPriceItemId] = useState<string | null>(null);
   const [editPriceValue, setEditPriceValue] = useState<string>('');
   const [priceSavingId, setPriceSavingId] = useState<string | null>(null);
@@ -370,6 +427,17 @@ export default function ShoppingPortal() {
   const [sqlCopied, setSqlCopied] = useState(false);
   const [showSqlHelper, setShowSqlHelper] = useState(false);
 
+  // Ownership helper: Admin owns all, Vendor owns their own uploads
+  const isItemOwner = (item: InventoryItem) => {
+    if (isAdmin) return true;
+    if (!isVendor || !user) return false;
+    if (item.vendorId && item.vendorId === user.id) return true;
+    const vName = item.vendorName?.toLowerCase().trim();
+    const bName = user.businessName?.toLowerCase().trim();
+    const uName = `${user.firstName} ${user.lastName}`.toLowerCase().trim();
+    return Boolean((bName && vName === bName) || (uName && vName === uName));
+  };
+
   // Admin Upload Form State
   const [inventoryCategory, setInventoryCategory] = useState<ProductCategory>('laptops');
   const [inventoryBrandSelect, setInventoryBrandSelect] = useState('HP');
@@ -401,7 +469,7 @@ export default function ShoppingPortal() {
       return;
     }
 
-    const metadata = session.user.user_metadata;
+    const metadata = (session.user.user_metadata || {}) as Record<string, any>;
     const account: UserType = {
       id: session.user.id,
       role: 'client',
@@ -409,7 +477,8 @@ export default function ShoppingPortal() {
       firstName: typeof metadata.first_name === 'string' ? metadata.first_name : '',
       lastName: typeof metadata.last_name === 'string' ? metadata.last_name : '',
       phone: typeof metadata.phone === 'string' ? metadata.phone : '',
-      location: typeof metadata.location === 'string' ? metadata.location : ''
+      location: typeof metadata.location === 'string' ? metadata.location : '',
+      businessName: typeof metadata.business_name === 'string' ? metadata.business_name : ''
     };
     if (!relaySupabase) {
       setUser(account);
@@ -422,7 +491,9 @@ export default function ShoppingPortal() {
       .eq('user_id', session.user.id)
       .maybeSingle();
 
-    const role = (data?.role === 'admin' || session.user.email?.toLowerCase() === 'zumkel023@gmail.com') ? 'admin' : 'client';
+    const isExplicitAdmin = data?.role === 'admin' || session.user.email?.toLowerCase() === 'zumkel023@gmail.com';
+    const isExplicitVendor = data?.role === 'vendor' || metadata?.role === 'vendor' || metadata?.is_vendor === true;
+    const role: 'admin' | 'vendor' | 'client' = isExplicitAdmin ? 'admin' : isExplicitVendor ? 'vendor' : 'client';
     setUser({ ...account, role });
   }, []);
 
@@ -474,11 +545,16 @@ export default function ShoppingPortal() {
         setInventoryItems(data.map(item => {
           const category = parseCategory(item);
           const gadgetType = category === 'gadgets' ? parseGadgetType(item.highlights || '') : undefined;
+          const vendor = parseVendor(item);
           return {
             ...item,
             price: Number(item.price),
             category,
-            gadgetType
+            gadgetType,
+            vendorId: vendor.vendorId || item.vendor_id,
+            vendorName: vendor.vendorName,
+            vendorPhone: vendor.vendorPhone,
+            isOfficial: vendor.isOfficial
           } as InventoryItem;
         }));
       } else {
@@ -508,6 +584,7 @@ export default function ShoppingPortal() {
     setLoginBusy(true);
     try {
       if (creatingAccount) {
+        const isVendorSignup = signupAccountType === 'vendor';
         const { data, error } = await relaySupabase.auth.signUp({
           email: loginEmail.trim(),
           password: loginPassword,
@@ -517,23 +594,31 @@ export default function ShoppingPortal() {
               first_name: signupFirstName.trim(),
               last_name: signupLastName.trim(),
               phone: signupPhone.trim(),
-              location: signupLocation.trim()
+              location: signupLocation.trim(),
+              role: isVendorSignup ? 'vendor' : 'client',
+              is_vendor: isVendorSignup,
+              business_name: isVendorSignup ? signupBusinessName.trim() : undefined
             }
           }
         });
         if (error) throw error;
 
+        const role: 'admin' | 'vendor' | 'client' = isVendorSignup ? 'vendor' : 'client';
         const clientAccount: UserType = {
           id: data.user?.id || ('client-' + Date.now()),
-          role: 'client',
+          role,
           email: loginEmail.trim(),
           firstName: signupFirstName.trim(),
           lastName: signupLastName.trim(),
           phone: signupPhone.trim(),
-          location: signupLocation.trim()
+          location: signupLocation.trim(),
+          businessName: isVendorSignup ? signupBusinessName.trim() : undefined
         };
         setUser(clientAccount);
         window.localStorage.setItem('gkb_client_session', JSON.stringify(clientAccount));
+        if (isVendorSignup) {
+          setActiveTab('admin-inventory');
+        }
       } else {
         const identifier = loginEmail.trim();
         const credentials = identifier.includes('@')
@@ -567,13 +652,13 @@ export default function ShoppingPortal() {
     setActiveTab('catalog');
   };
 
-  // Add Inventory item (Admin)
+  // Add Inventory item (Admin or Vendor)
   const handleAddInventoryItem = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setInventoryError('');
     setInventoryMessage('');
-    if (user?.role !== 'admin' || !relaySupabase) {
-      setInventoryError('Only administrators can add retail inventory.');
+    if ((!isAdmin && !isVendor) || !user || !relaySupabase) {
+      setInventoryError('Only authorized administrators or registered vendors can add retail inventory.');
       return;
     }
     if (!inventoryImage) {
@@ -612,7 +697,23 @@ export default function ShoppingPortal() {
         ? `[Category: ${categoryLabel} | Type: ${inventoryGadgetType}${inventoryGadgetCapacity !== 'None / N/A' ? ` | Capacity: ${inventoryGadgetCapacity}` : ''}]`
         : `[Category: ${categoryLabel}]`;
 
-      const enrichedHighlights = `${categoryTag}\n${inventoryHighlights.trim()}`;
+      // Determine listing vendor
+      const activeVendorName = isVendor
+        ? (user.businessName || [user.firstName, user.lastName].filter(Boolean).join(' ') || 'Verified Vendor')
+        : (vendorAssignment === 'New Custom Vendor' ? (vendorCustomAssignName.trim() || 'Third-Party Vendor') : vendorAssignment);
+
+      const activeVendorPhone = isVendor
+        ? (user.phone || '0552117787')
+        : (vendorAssignment === 'New Custom Vendor' ? (vendorCustomAssignPhone.trim() || '0552117787') : '0552117787');
+
+      const activeVendorId = isVendor ? user.id : undefined;
+      const isOfficialStore = activeVendorName.toLowerCase().includes('gkb') || activeVendorName.toLowerCase().includes('official');
+
+      const vendorTag = isOfficialStore
+        ? '[Vendor: GKB Official Store | Phone: 0552117787]'
+        : `[Vendor: ${activeVendorName} | Phone: ${activeVendorPhone}${activeVendorId ? ` | UID: ${activeVendorId}` : ''}]`;
+
+      const enrichedHighlights = `${categoryTag}\n${vendorTag}\n${inventoryHighlights.trim()}`;
 
       // In case database has strict check constraint on ram/storage, provide fallback valid values
       const dbRam = inventoryCategory === 'gadgets' ? '4GB' : inventoryRam;
@@ -630,20 +731,34 @@ export default function ShoppingPortal() {
         image_path: path
       };
 
-      // Try inserting with category column if it exists in Supabase
+      // Try inserting with native vendor and category columns
       let result = await relaySupabase
         .from('gkb_inventory_items')
-        .insert({ ...payload, category: inventoryCategory })
+        .insert({
+          ...payload,
+          category: inventoryCategory,
+          vendor_id: activeVendorId,
+          vendor_name: activeVendorName,
+          vendor_phone: activeVendorPhone
+        })
         .select()
         .single();
 
-      // Graceful fallback if category column doesn't exist yet in Supabase
-      if (result.error && result.error.message && result.error.message.includes('category')) {
+      // Graceful fallbacks if vendor or category columns don't exist yet in Supabase
+      if (result.error) {
         result = await relaySupabase
           .from('gkb_inventory_items')
-          .insert(payload)
+          .insert({ ...payload, category: inventoryCategory })
           .select()
           .single();
+
+        if (result.error) {
+          result = await relaySupabase
+            .from('gkb_inventory_items')
+            .insert(payload)
+            .select()
+            .single();
+        }
       }
 
       if (result.error) throw result.error;
@@ -655,7 +770,11 @@ export default function ShoppingPortal() {
         category: inventoryCategory,
         gadgetType: inventoryCategory === 'gadgets' ? inventoryGadgetType : undefined,
         storage: inventoryCategory === 'gadgets' && inventoryGadgetCapacity !== 'None / N/A' ? inventoryGadgetCapacity : data.storage,
-        ram: inventoryCategory === 'gadgets' ? 'N/A' : data.ram
+        ram: inventoryCategory === 'gadgets' ? 'N/A' : data.ram,
+        vendorId: activeVendorId || data.vendor_id,
+        vendorName: activeVendorName,
+        vendorPhone: activeVendorPhone,
+        isOfficial: isOfficialStore
       };
 
       setInventoryItems(current => [newItem, ...current]);
@@ -664,7 +783,7 @@ export default function ShoppingPortal() {
       setInventoryPrice('');
       setInventoryCustomBrand('');
       setInventoryImage(null);
-      setInventoryMessage(`${categoryLabel} published to store catalog successfully.`);
+      setInventoryMessage(`${categoryLabel} published to live storefront under "${activeVendorName}" successfully!`);
     } catch (error) {
       setInventoryError(error instanceof Error ? error.message : 'Failed to add product.');
     } finally {
@@ -672,9 +791,9 @@ export default function ShoppingPortal() {
     }
   };
 
-  // Archive item toggle
+  // Archive item toggle (Admin or Item Owner Vendor)
   const handleToggleInventoryItem = async (item: InventoryItem) => {
-    if (!isAdmin || !relaySupabase) return;
+    if (!isItemOwner(item) || !relaySupabase) return;
     try {
       const { data, error } = await relaySupabase
         .from('gkb_inventory_items')
@@ -683,15 +802,15 @@ export default function ShoppingPortal() {
         .select()
         .single();
       if (error) throw error;
-      setInventoryItems(current => current.map(dev => dev.id === item.id ? { ...data, price: Number(data.price), category: item.category, gadgetType: item.gadgetType } as InventoryItem : dev));
+      setInventoryItems(current => current.map(dev => dev.id === item.id ? { ...dev, ...data, price: Number(data.price) } as InventoryItem : dev));
     } catch (error) {
       console.error('Failed to update product state:', error);
     }
   };
 
-  // Price editing handlers (Strictly Admin Only)
+  // Price editing handlers (Admin or Item Owner Vendor)
   const handleStartEditPrice = (item: InventoryItem) => {
-    if (!isAdmin) return;
+    if (!isItemOwner(item)) return;
     setEditingPriceItemId(item.id);
     setEditPriceValue(item.price.toString());
     setPriceEditError('');
@@ -705,7 +824,7 @@ export default function ShoppingPortal() {
   };
 
   const handleSavePrice = async (item: InventoryItem) => {
-    if (!isAdmin || !relaySupabase) return;
+    if (!isItemOwner(item) || !relaySupabase) return;
     const newPrice = parseFloat(editPriceValue);
     if (isNaN(newPrice) || newPrice <= 0) {
       setPriceEditError('Please enter a valid positive price in GHS (e.g. 3500.00).');
@@ -732,9 +851,7 @@ export default function ShoppingPortal() {
             ? ({
                 ...dev,
                 ...data,
-                price: Number(data.price),
-                category: dev.category,
-                gadgetType: dev.gadgetType
+                price: Number(data.price)
               } as InventoryItem)
             : dev
         )
@@ -995,9 +1112,9 @@ export default function ShoppingPortal() {
     }
   };
 
-  // Filter products by category, gadgetType, search, and brand
+  // Filter products by category, gadgetType, search, brand, and vendor
   const displayItems = inventoryItems.filter(item => {
-    if (!isAdmin && !item.active) return false;
+    if (!isAdmin && !isVendor && !item.active) return false;
     const category = item.category || parseCategory(item);
     const matchesCategory = selectedCategory === 'all' || category === selectedCategory;
 
@@ -1008,11 +1125,18 @@ export default function ShoppingPortal() {
 
     const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.vendorName && item.vendorName.toLowerCase().includes(searchQuery.toLowerCase())) ||
       cleanHighlights(item.highlights).toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesBrand = selectedBrand === 'All' || item.brand.toLowerCase() === selectedBrand.toLowerCase();
 
-    return matchesCategory && matchesGadgetType && matchesSearch && matchesBrand;
+    const matchesVendor = selectedVendorFilter === 'all' || (
+      selectedVendorFilter === 'official'
+        ? Boolean(item.isOfficial)
+        : Boolean(item.vendorName && item.vendorName.toLowerCase() === selectedVendorFilter.toLowerCase())
+    );
+
+    return matchesCategory && matchesGadgetType && matchesSearch && matchesBrand && matchesVendor;
   });
 
   const uniqueBrands = ['All', ...Array.from(new Set(
@@ -1020,6 +1144,10 @@ export default function ShoppingPortal() {
       .filter(item => selectedCategory === 'all' || (item.category || parseCategory(item)) === selectedCategory)
       .map(i => i.brand)
   ))];
+
+  const availableVendors = Array.from(new Set(
+    inventoryItems.map(i => i.vendorName).filter(Boolean)
+  )) as string[];
 
   return (
     <div className={`min-h-screen flex flex-col bg-slate-950 text-slate-100 font-sans selection:bg-cyan-500 selection:text-black relative overflow-x-hidden ${isLightMode ? 'theme-light' : ''}`}>
@@ -1070,13 +1198,14 @@ export default function ShoppingPortal() {
             >
               Order & Track
             </button>
-            {isAdmin && (
+            {canManageInventory && (
               <button
                 type="button"
                 onClick={() => setActiveTab('admin-inventory')}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'admin-inventory' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/50 shadow-[0_0_10px_rgba(168,85,247,0.3)]' : 'text-slate-400 hover:text-purple-300'}`}
+                className={`px-3 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-1.5 ${activeTab === 'admin-inventory' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/50 shadow-[0_0_10px_rgba(168,85,247,0.3)]' : 'text-slate-400 hover:text-purple-300'}`}
               >
-                Manage Inventory
+                {isVendor ? <Store className="h-3.5 w-3.5" /> : <Layers className="h-3.5 w-3.5" />}
+                {isAdmin ? 'Manage Inventory' : 'Vendor Portal'}
               </button>
             )}
             <button
@@ -1102,13 +1231,18 @@ export default function ShoppingPortal() {
             {user ? (
               <div className="flex items-center space-x-2 sm:space-x-3 bg-slate-900 border border-purple-500/30 px-2 sm:px-3 py-1.5 rounded-lg">
                 <div className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                {(user.role === 'admin' || user.email?.toLowerCase() === 'zumkel023@gmail.com') ? (
+                {isAdmin ? (
                   <span className="inline-flex items-center gap-1.5 text-xs font-bold font-mono tracking-wider text-amber-300">
                     <Shield className="w-3.5 h-3.5 text-amber-400 fill-amber-400/20" />
                     Admin
                   </span>
+                ) : isVendor ? (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-bold font-mono tracking-wider text-purple-300">
+                    <Store className="w-3.5 h-3.5 text-purple-400" />
+                    {user?.businessName || user?.firstName || 'Vendor'}
+                  </span>
                 ) : (
-                  <span className="text-xs text-purple-300 font-mono truncate max-w-[72px] sm:max-w-[120px]">{user.email}</span>
+                  <span className="text-xs text-purple-300 font-mono truncate max-w-[72px] sm:max-w-[120px]">{user.firstName || user.email}</span>
                 )}
                 <button
                   type="button"
@@ -1147,13 +1281,14 @@ export default function ShoppingPortal() {
           >
             Order & Track
           </button>
-          {isAdmin && (
+          {canManageInventory && (
             <button
               type="button"
               onClick={() => setActiveTab('admin-inventory')}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap ${activeTab === 'admin-inventory' ? 'bg-purple-500/20 text-purple-300' : 'text-slate-400'}`}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap flex items-center gap-1 ${activeTab === 'admin-inventory' ? 'bg-purple-500/20 text-purple-300' : 'text-slate-400'}`}
             >
-              Inventory
+              {isVendor ? <Store className="h-3 w-3" /> : null}
+              {isAdmin ? 'Inventory' : 'Vendor Hub'}
             </button>
           )}
           <button
@@ -1321,9 +1456,28 @@ export default function ShoppingPortal() {
                   />
                 </div>
 
-                {/* Brand Pills tailored to current category */}
-                <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+                {/* Brand & Vendor Filters */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none flex-wrap sm:flex-nowrap">
                   <Filter className="h-4 w-4 text-cyan-400 shrink-0 hidden sm:block" />
+
+                  {/* Vendor Dropdown Filter */}
+                  {availableVendors.length > 0 && (
+                    <div className="flex items-center gap-1.5 bg-slate-900 border border-purple-500/30 rounded-lg px-2.5 py-1 text-xs shrink-0">
+                      <Store className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                      <select
+                        value={selectedVendorFilter}
+                        onChange={e => setSelectedVendorFilter(e.target.value)}
+                        className="bg-transparent text-purple-200 font-semibold focus:outline-none cursor-pointer"
+                      >
+                        <option value="all" className="bg-slate-950 text-white">All Sellers ({inventoryItems.length})</option>
+                        <option value="official" className="bg-slate-950 text-white">⚡ GKB Official</option>
+                        {availableVendors.filter(v => !v.toLowerCase().includes('official')).map(v => (
+                          <option key={v} value={v} className="bg-slate-950 text-white">🏪 {v}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   {uniqueBrands.map(brand => (
                     <button
                       key={brand}
@@ -1410,13 +1564,43 @@ export default function ShoppingPortal() {
                               {isPhone ? 'Phone' : isGadget ? 'Gadget' : 'Laptop'}
                             </span>
                           </div>
+
+                          {/* Vendor / Official Badge on Top-Right */}
+                          <div className="absolute top-3 right-3 flex items-center">
+                            {item.isOfficial ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-slate-950/85 backdrop-blur-md border border-cyan-500/40 px-2.5 py-1 text-[10px] font-bold text-cyan-300 shadow-sm">
+                                <BadgeCheck className="h-3 w-3 text-cyan-400" />
+                                <span>GKB Official</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-slate-950/85 backdrop-blur-md border border-amber-500/40 px-2.5 py-1 text-[10px] font-bold text-amber-300 shadow-sm">
+                                <Store className="h-3 w-3 text-amber-400" />
+                                <span className="max-w-[110px] truncate">{item.vendorName || 'Partner Vendor'}</span>
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         {/* Details */}
                         <div className="p-5 space-y-3">
-                          <h3 className="text-lg font-bold text-white group-hover:text-cyan-300 transition-colors">
-                            {item.title}
-                          </h3>
+                          <div>
+                            <h3 className="text-lg font-bold text-white group-hover:text-cyan-300 transition-colors">
+                              {item.title}
+                            </h3>
+                            {/* Seller / Vendor Attribution Tag */}
+                            <div className="mt-1 flex items-center gap-1 text-[11px] text-slate-400">
+                              <span className="text-slate-500">Sold by:</span>
+                              {item.isOfficial ? (
+                                <span className="font-semibold text-cyan-400 flex items-center gap-1">
+                                  <Zap className="h-3 w-3" /> GKB Official Store
+                                </span>
+                              ) : (
+                                <span className="font-semibold text-amber-300 flex items-center gap-1">
+                                  <Store className="h-3 w-3" /> {item.vendorName || 'Authorized Vendor'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
 
                           {/* Spec Badges adapted to category */}
                           <div className="flex flex-wrap gap-2 text-xs">
@@ -1474,7 +1658,7 @@ export default function ShoppingPortal() {
                       <div className="border-t border-slate-800/80 p-5 pt-4 flex items-center justify-between gap-2">
                         <div>
                           <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Cash / MoMo Price</p>
-                          {isAdmin && editingPriceItemId === item.id ? (
+                          {isItemOwner(item) && editingPriceItemId === item.id ? (
                             <div className="mt-1 flex items-center gap-1.5 animate-fadeIn">
                               <span className="text-xs font-mono font-bold text-amber-300">GHS</span>
                               <input
@@ -1518,12 +1702,12 @@ export default function ShoppingPortal() {
                               <p className="text-xl font-black text-yellow-300">
                                 GHS {item.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                               </p>
-                              {isAdmin && (
+                              {isItemOwner(item) && (
                                 <button
                                   type="button"
                                   onClick={() => handleStartEditPrice(item)}
                                   className="p-1 rounded-md text-slate-400 hover:text-cyan-300 hover:bg-slate-800/60 transition-colors cursor-pointer"
-                                  title="Edit price (Admin only)"
+                                  title="Edit price (Owner/Admin)"
                                 >
                                   <Pencil className="h-3.5 w-3.5" />
                                 </button>
@@ -1565,29 +1749,45 @@ export default function ShoppingPortal() {
           </div>
         )}
 
-        {/* ================= ADMIN INVENTORY VIEW ================= */}
-        {activeTab === 'admin-inventory' && isAdmin && (
+        {/* ================= ADMIN & VENDOR INVENTORY VIEW ================= */}
+        {activeTab === 'admin-inventory' && canManageInventory && (
           <div className="space-y-8 animate-fadeIn">
             <section className="rounded-2xl border border-cyan-500/30 bg-slate-900/70 p-6 sm:p-8">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
                 <div>
-                  <h3 className="text-xl font-bold text-white">Add a Retail Product Listing</h3>
-                  <p className="mt-1 text-sm text-slate-400">Upload a Laptop, Mobile Phone, or Electronic Gadget to the live store.</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-xl font-bold text-white">
+                      {isAdmin ? 'GKB Admin Inventory & Vendor Management' : 'Vendor Merchant Portal'}
+                    </h3>
+                    {isVendor && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                        <Store className="h-3.5 w-3.5 text-amber-400" />
+                        <span>{user?.businessName || 'Authorized Vendor'}</span>
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-sm text-slate-400">
+                    {isAdmin
+                      ? 'Upload and manage retail listings for GKB Official Store or partner vendors.'
+                      : `Upload and manage your store products on GKB Shopping Portal as ${user?.businessName || 'Vendor'}.`}
+                  </p>
                 </div>
 
-                {/* Database Schema helper trigger */}
-                <button
-                  type="button"
-                  onClick={() => setShowSqlHelper(v => !v)}
-                  className="gkb-sql-helper-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800/80 text-slate-300 hover:text-cyan-300 hover:border-cyan-500/40 text-xs font-mono font-medium transition-all cursor-pointer self-start sm:self-auto"
-                >
-                  <Cpu className="h-3.5 w-3.5" />
-                  {showSqlHelper ? 'Hide SQL Migration' : 'Supabase SQL Helper'}
-                </button>
+                {/* Database Schema helper trigger (Admin only) */}
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setShowSqlHelper(v => !v)}
+                    className="gkb-sql-helper-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800/80 text-slate-300 hover:text-cyan-300 hover:border-cyan-500/40 text-xs font-mono font-medium transition-all cursor-pointer self-start sm:self-auto"
+                  >
+                    <Cpu className="h-3.5 w-3.5" />
+                    {showSqlHelper ? 'Hide SQL Migration' : 'Supabase SQL Helper'}
+                  </button>
+                )}
               </div>
 
               {/* Optional SQL Migration Card for Admin */}
-              {showSqlHelper && (
+              {isAdmin && showSqlHelper && (
                 <div className="mt-4 p-4 rounded-xl border border-slate-700 bg-slate-950/90 space-y-3 animate-fadeIn">
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-mono text-cyan-400 font-bold flex items-center gap-1.5">
@@ -1596,7 +1796,7 @@ export default function ShoppingPortal() {
                     <button
                       type="button"
                       onClick={() => {
-                        const sql = `-- GKB Shopping Portal Multi-Category Schema Migration\nALTER TABLE public.gkb_inventory_items ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'laptops';\nALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_items_ram_check;\nALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_items_storage_check;\nALTER TABLE public.gkb_inventory_items ALTER COLUMN ram DROP NOT NULL;\nALTER TABLE public.gkb_inventory_items ALTER COLUMN storage DROP NOT NULL;`;
+                        const sql = `-- GKB Shopping Portal Multi-Category & Multi-Vendor Schema Migration\nALTER TABLE public.gkb_inventory_items ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'laptops';\nALTER TABLE public.gkb_inventory_items ADD COLUMN IF NOT EXISTS vendor_id TEXT;\nALTER TABLE public.gkb_inventory_items ADD COLUMN IF NOT EXISTS vendor_name TEXT DEFAULT 'GKB Official Store';\nALTER TABLE public.gkb_inventory_items ADD COLUMN IF NOT EXISTS vendor_phone TEXT DEFAULT '0552117787';\nALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_items_ram_check;\nALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_items_storage_check;\nALTER TABLE public.gkb_inventory_items ALTER COLUMN ram DROP NOT NULL;\nALTER TABLE public.gkb_inventory_items ALTER COLUMN storage DROP NOT NULL;`;
                         navigator.clipboard.writeText(sql);
                         setSqlCopied(true);
                         setTimeout(() => setSqlCopied(false), 2500);
@@ -1608,13 +1808,16 @@ export default function ShoppingPortal() {
                     </button>
                   </div>
                   <pre className="text-[11px] font-mono text-slate-300 bg-slate-900 p-3 rounded-lg overflow-x-auto border border-slate-800">
-{`-- Run once in Supabase SQL Editor if you want native category columns:
+{`-- Run once in Supabase SQL Editor if you want native category & vendor columns:
 ALTER TABLE public.gkb_inventory_items ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'laptops';
+ALTER TABLE public.gkb_inventory_items ADD COLUMN IF NOT EXISTS vendor_id TEXT;
+ALTER TABLE public.gkb_inventory_items ADD COLUMN IF NOT EXISTS vendor_name TEXT DEFAULT 'GKB Official Store';
+ALTER TABLE public.gkb_inventory_items ADD COLUMN IF NOT EXISTS vendor_phone TEXT DEFAULT '0552117787';
 ALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_items_ram_check;
 ALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_items_storage_check;`}
                   </pre>
                   <p className="text-[11px] text-slate-400">
-                    *Note: Our portal automatically preserves all categories and specs in highlights metadata even if you haven't run the SQL yet!
+                    *Note: Our portal automatically preserves all categories, vendors, and specs in highlights metadata even if you haven't run the SQL yet!
                   </p>
                 </div>
               )}
@@ -1742,6 +1945,76 @@ WiFi
               </div>
 
               <form onSubmit={handleAddInventoryItem} className="mt-6 grid gap-4 sm:grid-cols-2">
+                {/* Admin: Select Vendor / Store Owner */}
+                {isAdmin && (
+                  <div className="sm:col-span-2 p-3.5 rounded-xl border border-cyan-500/30 bg-slate-950/60 space-y-2">
+                    <label className="text-xs font-bold text-cyan-400 uppercase tracking-wider block">
+                      Product Seller / Vendor Assignment
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <select
+                          value={vendorAssignment}
+                          onChange={e => setVendorAssignment(e.target.value)}
+                          className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-white focus:border-cyan-400 focus:outline-none"
+                        >
+                          <option value="GKB Official Store">⚡ GKB Official Store (Direct Stock)</option>
+                          {availableVendors
+                            .filter(v => v !== 'GKB Official Store')
+                            .map(v => (
+                              <option key={v} value={v}>
+                                🏪 {v}
+                              </option>
+                            ))}
+                          <option value="New Custom Vendor">+ Assign to New Custom Vendor</option>
+                        </select>
+                      </div>
+
+                      {vendorAssignment === 'New Custom Vendor' && (
+                        <div className="grid grid-cols-2 gap-2 animate-fadeIn">
+                          <input
+                            type="text"
+                            required
+                            value={vendorCustomAssignName}
+                            onChange={e => setVendorCustomAssignName(e.target.value)}
+                            placeholder="Vendor Store Name *"
+                            className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white focus:border-cyan-400 focus:outline-none"
+                          />
+                          <input
+                            type="tel"
+                            value={vendorCustomAssignPhone}
+                            onChange={e => setVendorCustomAssignPhone(e.target.value)}
+                            placeholder="Vendor Phone (optional)"
+                            className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white focus:border-cyan-400 focus:outline-none"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Vendor: Identity Banner */}
+                {isVendor && (
+                  <div className="sm:col-span-2 p-3.5 rounded-xl border border-amber-500/40 bg-amber-500/10 flex items-center justify-between gap-3 animate-fadeIn">
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-300 shrink-0">
+                        <Store className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-amber-200">
+                          Listing as: <span className="text-white underline font-mono">{user?.businessName || 'Verified Vendor'}</span>
+                        </p>
+                        <p className="text-[11px] text-amber-300/70">
+                          This product will be published to the GKB Shopping Catalog under your store name with direct order routing.
+                        </p>
+                      </div>
+                    </div>
+                    <span className="px-2.5 py-1 rounded-lg bg-amber-400/20 border border-amber-400/30 text-[10px] font-mono font-bold text-amber-300 uppercase tracking-wider shrink-0">
+                      Merchant Mode
+                    </span>
+                  </div>
+                )}
+
                 {/* 1. Main Category Dropdown */}
                 <div className="sm:col-span-2">
                   <label className="text-xs font-bold text-cyan-400 dark:text-cyan-300 uppercase tracking-wider block mb-2">
@@ -1996,14 +2269,34 @@ WiFi
 
             {/* Existing Inventory Management Table */}
             <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 sm:p-8 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-lg font-bold text-white">Current Listings ({inventoryItems.length})</h3>
-                  <p className="text-xs text-slate-400">Manage products, adjust prices as costs change, or toggle active status.</p>
+                  <h3 className="text-lg font-bold text-white">
+                    {isVendor ? `Your Merchant Listings (${inventoryItems.filter(isItemOwner).length})` : `All Inventory & Partner Listings (${inventoryItems.length})`}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    {isVendor
+                      ? 'Manage your store products, adjust retail prices as wholesale costs change, or toggle active status.'
+                      : 'Master inventory control: adjust prices, assign vendors, or toggle active status.'}
+                  </p>
                 </div>
-                <span className="text-xs text-slate-400 font-mono">
-                  {inventoryItems.filter(i => (i.category || parseCategory(i)) === 'laptops').length} Laptops · {inventoryItems.filter(i => (i.category || parseCategory(i)) === 'phones').length} Phones · {inventoryItems.filter(i => (i.category || parseCategory(i)) === 'gadgets').length} Gadgets
-                </span>
+                {isAdmin && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-400 font-medium">Filter by Seller:</span>
+                    <select
+                      value={selectedVendorFilter}
+                      onChange={e => setSelectedVendorFilter(e.target.value)}
+                      className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold text-white focus:border-cyan-400 focus:outline-none"
+                    >
+                      <option value="all">All Sellers ({availableVendors.length})</option>
+                      {availableVendors.map(v => (
+                        <option key={v} value={v}>
+                          {v}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
 
               {priceEditSuccess && (
@@ -2021,107 +2314,128 @@ WiFi
               )}
 
               <div className="divide-y divide-slate-800">
-                {inventoryItems.map(item => {
-                  const category = item.category || parseCategory(item);
-                  const isEditingThisPrice = editingPriceItemId === item.id;
-                  return (
-                    <div key={item.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-bold text-white">{item.title}</span>
-                          <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
-                            category === 'phones'
-                              ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                              : category === 'gadgets'
-                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                              : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                          }`}>
-                            {category === 'phones' ? 'PHONE' : category === 'gadgets' ? 'GADGET' : 'LAPTOP'}
-                          </span>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${item.active ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'}`}>
-                            {item.active ? 'ACTIVE' : 'ARCHIVED'}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-400 mt-1">
-                          {item.brand} · <span className="font-bold text-amber-300 font-mono">GHS {item.price.toFixed(2)}</span>
-                          {category !== 'gadgets' && ` · ${item.ram} RAM · ${item.storage}`}
-                          {category === 'gadgets' && item.storage && item.storage !== 'None' && item.storage !== 'N/A' && ` · Capacity: ${item.storage}`}
-                        </p>
-
-                        {/* Inline Price Editor when active */}
-                        {isEditingThisPrice && (
-                          <div className="mt-3 flex items-center gap-2 flex-wrap bg-slate-950 p-3 rounded-xl border border-cyan-500/40 animate-fadeIn">
-                            <span className="text-xs font-mono font-bold text-cyan-300 flex items-center gap-1">
-                              <DollarSign className="h-3.5 w-3.5" /> Adjust Price (GHS):
+                {inventoryItems
+                  .filter(item => {
+                    if (isVendor) return isItemOwner(item);
+                    if (isAdmin && selectedVendorFilter !== 'all') {
+                      return (item.vendorName || 'GKB Official Store') === selectedVendorFilter;
+                    }
+                    return true;
+                  })
+                  .map(item => {
+                    const category = item.category || parseCategory(item);
+                    const isEditingThisPrice = editingPriceItemId === item.id;
+                    const canEdit = isItemOwner(item);
+                    return (
+                      <div key={item.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-white">{item.title}</span>
+                            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
+                              category === 'phones'
+                                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                                : category === 'gadgets'
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                            }`}>
+                              {category === 'phones' ? 'PHONE' : category === 'gadgets' ? 'GADGET' : 'LAPTOP'}
                             </span>
-                            <div className="relative">
-                              <input
-                                type="number"
-                                step="0.01"
-                                min="1"
-                                value={editPriceValue}
-                                onChange={e => setEditPriceValue(e.target.value)}
-                                onKeyDown={e => {
-                                  if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    void handleSavePrice(item);
-                                  } else if (e.key === 'Escape') {
-                                    handleCancelEditPrice();
-                                  }
-                                }}
-                                placeholder="e.g. 4500.00"
-                                className="w-36 rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-bold text-white focus:border-cyan-400 focus:outline-none"
-                                autoFocus
-                              />
+                            {/* Vendor badge in row */}
+                            {item.isOfficial ? (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 flex items-center gap-1">
+                                <BadgeCheck className="h-3 w-3 text-cyan-400" /> GKB Official
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                                <Store className="h-3 w-3 text-amber-400" /> {item.vendorName || 'Vendor'}
+                              </span>
+                            )}
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${item.active ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'}`}>
+                              {item.active ? 'ACTIVE' : 'ARCHIVED'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400 mt-1">
+                            {item.brand} · <span className="font-bold text-amber-300 font-mono">GHS {item.price.toFixed(2)}</span>
+                            {category !== 'gadgets' && ` · ${item.ram} RAM · ${item.storage}`}
+                            {category === 'gadgets' && item.storage && item.storage !== 'None' && item.storage !== 'N/A' && ` · Capacity: ${item.storage}`}
+                          </p>
+
+                          {/* Inline Price Editor when active */}
+                          {isEditingThisPrice && (
+                            <div className="mt-3 flex items-center gap-2 flex-wrap bg-slate-950 p-3 rounded-xl border border-cyan-500/40 animate-fadeIn">
+                              <span className="text-xs font-mono font-bold text-cyan-300 flex items-center gap-1">
+                                <DollarSign className="h-3.5 w-3.5" /> Adjust Price (GHS):
+                              </span>
+                              <div className="relative">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="1"
+                                  value={editPriceValue}
+                                  onChange={e => setEditPriceValue(e.target.value)}
+                                  onKeyDown={e => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      void handleSavePrice(item);
+                                    } else if (e.key === 'Escape') {
+                                      handleCancelEditPrice();
+                                    }
+                                  }}
+                                  placeholder="e.g. 4500.00"
+                                  className="w-36 rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-bold text-white focus:border-cyan-400 focus:outline-none"
+                                  autoFocus
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                disabled={priceSavingId === item.id}
+                                onClick={() => void handleSavePrice(item)}
+                                className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1.5 cursor-pointer shadow-sm shadow-cyan-500/20"
+                              >
+                                {priceSavingId === item.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                                {priceSavingId === item.id ? 'Saving…' : 'Save Price'}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={priceSavingId === item.id}
+                                onClick={handleCancelEditPrice}
+                                className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-all cursor-pointer"
+                              >
+                                Cancel
+                              </button>
                             </div>
+                          )}
+                        </div>
+
+                        {canEdit && (
+                          <div className="flex items-center gap-2 shrink-0">
+                            {!isEditingThisPrice && (
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditPrice(item)}
+                                className="text-xs px-3 py-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
+                                title="Edit price of this product"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                                Edit Price
+                              </button>
+                            )}
                             <button
                               type="button"
-                              disabled={priceSavingId === item.id}
-                              onClick={() => void handleSavePrice(item)}
-                              className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1.5 cursor-pointer shadow-sm shadow-cyan-500/20"
+                              onClick={() => handleToggleInventoryItem(item)}
+                              className={`text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors cursor-pointer ${
+                                item.active
+                                  ? 'border-amber-500/40 text-amber-300 hover:bg-amber-500/10'
+                                  : 'border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10'
+                              }`}
                             >
-                              {priceSavingId === item.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-                              {priceSavingId === item.id ? 'Saving…' : 'Save Price'}
-                            </button>
-                            <button
-                              type="button"
-                              disabled={priceSavingId === item.id}
-                              onClick={handleCancelEditPrice}
-                              className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-all cursor-pointer"
-                            >
-                              Cancel
+                              {item.active ? 'Archive Listing' : 'Restore Listing'}
                             </button>
                           </div>
                         )}
                       </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-                        {!isEditingThisPrice && (
-                          <button
-                            type="button"
-                            onClick={() => handleStartEditPrice(item)}
-                            className="text-xs px-3 py-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
-                            title="Edit price of this product"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                            Edit Price
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleToggleInventoryItem(item)}
-                          className={`text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors cursor-pointer ${
-                            item.active
-                              ? 'border-amber-500/40 text-amber-300 hover:bg-amber-500/10'
-                              : 'border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10'
-                          }`}
-                        >
-                          {item.active ? 'Archive Listing' : 'Restore Listing'}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
               </div>
             </section>
           </div>
@@ -2201,6 +2515,59 @@ WiFi
             )}
 
             <form onSubmit={handleLoginSubmit} className="space-y-3 text-xs">
+              {creatingAccount && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-slate-300 block mb-1 font-semibold">I want to register as:</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSignupAccountType('client')}
+                        className={`flex items-center justify-center gap-2 p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                          signupAccountType === 'client'
+                            ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400 shadow-sm shadow-cyan-500/20 ring-1 ring-cyan-400/40'
+                            : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                        }`}
+                      >
+                        <User className="h-3.5 w-3.5" />
+                        Buyer / Client
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSignupAccountType('vendor')}
+                        className={`flex items-center justify-center gap-2 p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                          signupAccountType === 'vendor'
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-400 shadow-sm shadow-amber-500/20 ring-1 ring-amber-400/40'
+                            : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                        }`}
+                      >
+                        <Store className="h-3.5 w-3.5 text-amber-400" />
+                        Vendor / Seller
+                      </button>
+                    </div>
+                  </div>
+
+                  {signupAccountType === 'vendor' && (
+                    <label className="text-slate-300 block animate-fadeIn">
+                      <span className="text-amber-300 font-bold flex items-center gap-1.5">
+                        <Store className="h-3.5 w-3.5 text-amber-400" /> Store / Business Name *
+                      </span>
+                      <input
+                        type="text"
+                        required
+                        value={signupBusinessName}
+                        onChange={e => setSignupBusinessName(e.target.value)}
+                        placeholder="e.g. Apex Laptops Hub, Swift Computers..."
+                        className="mt-1 w-full rounded-lg border border-amber-500/50 bg-slate-900 px-3 py-2 text-white focus:border-amber-400 focus:outline-none"
+                      />
+                      <span className="text-[10px] text-slate-400 mt-1 block">
+                        Your store name will be displayed on all laptops and products you publish to the marketplace.
+                      </span>
+                    </label>
+                  )}
+                </div>
+              )}
+
               {creatingAccount && (
                 <div className="grid grid-cols-2 gap-2">
                   <label className="text-slate-300">

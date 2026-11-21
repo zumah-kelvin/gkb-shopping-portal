@@ -58,3 +58,31 @@ $$;
 
 -- 7. Grant status update permissions on gkb_orders to authenticated users
 GRANT UPDATE (status, status_updated_at) ON TABLE public.gkb_orders TO authenticated;
+
+-- =====================================================================================
+-- 8. MULTI-VENDOR MARKETPLACE COLUMNS & PERMISSIONS
+-- =====================================================================================
+ALTER TABLE public.gkb_inventory_items 
+  ADD COLUMN IF NOT EXISTS vendor_id TEXT,
+  ADD COLUMN IF NOT EXISTS vendor_name TEXT DEFAULT 'GKB Official Store',
+  ADD COLUMN IF NOT EXISTS vendor_phone TEXT DEFAULT '0552117787';
+
+-- Allow authenticated vendors to insert their own products
+CREATE POLICY IF NOT EXISTS "Vendors can insert their own products"
+  ON public.gkb_inventory_items
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    (vendor_id IS NOT NULL AND vendor_id = auth.uid()::text) OR
+    public.is_gkb_admin()
+  );
+
+-- Allow vendors to update only their own products (e.g. price adjustment)
+CREATE POLICY IF NOT EXISTS "Vendors can update their own products"
+  ON public.gkb_inventory_items
+  FOR UPDATE
+  TO authenticated
+  USING (
+    (vendor_id IS NOT NULL AND vendor_id = auth.uid()::text) OR
+    public.is_gkb_admin()
+  );
