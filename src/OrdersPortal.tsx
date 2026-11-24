@@ -361,7 +361,7 @@ export default function OrdersPortal({
         setError(`Database warning: ${msg}. Status was applied to your session. Click 'Supabase SQL Fix' above to permanently allow '${nextStatus}' in database.`);
         setShowSqlHelper(true);
       }
-      
+
       // Update local state immediately so admin is never stuck
       setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: nextStatus, status_updated_at: updatedAt } : o));
     } catch (updateError) {
@@ -611,7 +611,7 @@ export default function OrdersPortal({
             The Supabase Postgres database has a check constraint on <code>gkb_orders.status</code> that needs to be updated to permit <code>'cancelled'</code>. Run this SQL once in your Supabase SQL Editor:
           </p>
           <pre className="text-[11px] font-mono text-cyan-200 bg-slate-950 p-3 rounded-lg border border-slate-800 overflow-x-auto">
-{`ALTER TABLE public.gkb_orders DROP CONSTRAINT IF EXISTS gkb_orders_status_check;
+            {`ALTER TABLE public.gkb_orders DROP CONSTRAINT IF EXISTS gkb_orders_status_check;
 ALTER TABLE public.gkb_orders ADD CONSTRAINT gkb_orders_status_check 
   CHECK (status in ('pending', 'processing', 'delivered', 'picked_up', 'cancelled'));`}
           </pre>
@@ -676,144 +676,144 @@ ALTER TABLE public.gkb_orders ADD CONSTRAINT gkb_orders_status_check
           </section>
         ) : (
           <section className="rounded-3xl border border-cyan-500/30 bg-slate-900/70 p-6 sm:p-8 backdrop-blur-xl shadow-xl space-y-6">
-          <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
-            <div className="rounded-xl bg-cyan-500/10 p-2.5 text-cyan-400 border border-cyan-500/20">
-              <ShoppingBag className="h-6 w-6" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-white">Place an Order</h3>
-              <p className="text-xs text-slate-400">Direct pickup in Tamale/Kumasi/Accra hubs or nationwide doorstep delivery.</p>
-            </div>
-          </div>
-
-          <form onSubmit={handleSubmitOrder} className="grid gap-4 sm:grid-cols-2">
-            {/* Item Name */}
-            <label className="text-xs font-mono uppercase tracking-wider text-slate-300 sm:col-span-2">
-              Product / Item Description *
-              <input
-                required
-                type="text"
-                value={productName}
-                onChange={e => setProductName(e.target.value)}
-                placeholder="e.g. HP EliteBook 840 G8 / Dell Latitude 7420 / RAM Module"
-                className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none focus:border-cyan-400 font-sans"
-              />
-            </label>
-
-            {/* Quantity */}
-            <label className="text-xs font-mono uppercase tracking-wider text-slate-300">
-              Quantity *
-              <input
-                required
-                type="number"
-                min="1"
-                max="999"
-                value={quantity}
-                onChange={e => setQuantity(e.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none focus:border-cyan-400 font-sans"
-              />
-            </label>
-
-            {/* Estimated Unit Price (if loaded) */}
-            <div className="flex flex-col justify-end">
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                <span className="text-[10px] font-mono uppercase text-slate-500">Unit Price</span>
-                <p className="text-sm font-bold text-emerald-400">
-                  {effectivePrice !== null
-                    ? new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS' }).format(effectivePrice)
-                    : 'Standard Catalog Rate'}
-                </p>
+            <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
+              <div className="rounded-xl bg-cyan-500/10 p-2.5 text-cyan-400 border border-cyan-500/20">
+                <ShoppingBag className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Place an Order</h3>
+                <p className="text-xs text-slate-400">Direct pickup in Tamale/Kumasi/Accra hubs or nationwide doorstep delivery.</p>
               </div>
             </div>
 
-            {/* Customer Name */}
-            <label className="text-xs font-mono uppercase tracking-wider text-slate-300">
-              Your Full Name *
-              <input
-                required
-                type="text"
-                value={customerName}
-                onChange={e => setCustomerName(e.target.value)}
-                placeholder="e.g. Kwame Mensah"
-                className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none focus:border-cyan-400 font-sans"
-              />
-            </label>
-
-            {/* Customer Phone */}
-            <label className="text-xs font-mono uppercase tracking-wider text-slate-300">
-              Phone / WhatsApp Number *
-              <input
-                required
-                type="tel"
-                value={customerPhone}
-                onChange={e => setCustomerPhone(e.target.value)}
-                placeholder="e.g. 0552117787"
-                className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none focus:border-cyan-400 font-sans"
-              />
-            </label>
-
-            {/* Email (Optional for guest) */}
-            <label className="text-xs font-mono uppercase tracking-wider text-slate-300">
-              Email Address (Optional)
-              <input
-                type="email"
-                value={customerEmail}
-                onChange={e => setCustomerEmail(e.target.value)}
-                placeholder="customer@gmail.com"
-                className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none focus:border-cyan-400 font-sans"
-              />
-            </label>
-
-            {/* Fulfillment */}
-            <label className="text-xs font-mono uppercase tracking-wider text-slate-300">
-              Delivery Preference *
-              <select
-                value={fulfillmentMethod}
-                onChange={e => setFulfillmentMethod(e.target.value as FulfillmentMethod)}
-                className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none focus:border-cyan-400 font-sans"
-              >
-                <option value="delivery">Nationwide Doorstep Delivery</option>
-                <option value="pickup">Direct Lab/Office Pickup</option>
-              </select>
-            </label>
-
-            {/* Address */}
-            {fulfillmentMethod === 'delivery' && (
+            <form onSubmit={handleSubmitOrder} className="grid gap-4 sm:grid-cols-2">
+              {/* Item Name */}
               <label className="text-xs font-mono uppercase tracking-wider text-slate-300 sm:col-span-2">
-                Delivery Location / Street Address *
-                <textarea
+                Product / Item Description *
+                <input
                   required
-                  rows={2}
-                  value={deliveryAddress}
-                  onChange={e => setDeliveryAddress(e.target.value)}
-                  placeholder="e.g. House No. 14, Ring Road Central, Tamale or KNUST Campus Hall 4"
+                  type="text"
+                  value={productName}
+                  onChange={e => setProductName(e.target.value)}
+                  placeholder="e.g. HP EliteBook 840 G8 / Dell Latitude 7420 / RAM Module"
                   className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none focus:border-cyan-400 font-sans"
                 />
               </label>
-            )}
 
-            {formError && (
-              <p role="alert" className="text-xs text-red-300 bg-red-500/10 border border-red-500/30 p-3 rounded-xl sm:col-span-2">
-                {formError}
-              </p>
-            )}
+              {/* Quantity */}
+              <label className="text-xs font-mono uppercase tracking-wider text-slate-300">
+                Quantity *
+                <input
+                  required
+                  type="number"
+                  min="1"
+                  max="999"
+                  value={quantity}
+                  onChange={e => setQuantity(e.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none focus:border-cyan-400 font-sans"
+                />
+              </label>
 
-            {successMessage && (
-              <p role="status" className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 p-3 rounded-xl sm:col-span-2">
-                {successMessage}
-              </p>
-            )}
+              {/* Estimated Unit Price (if loaded) */}
+              <div className="flex flex-col justify-end">
+                <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                  <span className="text-[10px] font-mono uppercase text-slate-500">Unit Price</span>
+                  <p className="text-sm font-bold text-emerald-400">
+                    {effectivePrice !== null
+                      ? new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS' }).format(effectivePrice)
+                      : 'Standard Catalog Rate'}
+                  </p>
+                </div>
+              </div>
 
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={saving}
-              className="sm:col-span-2 rounded-xl bg-gradient-to-r from-cyan-500 via-sky-400 to-purple-600 px-6 py-4 text-sm font-bold uppercase tracking-wider text-black shadow-lg shadow-cyan-500/25 hover:opacity-95 transition-all disabled:opacity-50 cursor-pointer"
-            >
-              {saving ? 'Processing Order...' : 'Submit Order & View Payment Info'}
-            </button>
-          </form>
-        </section>
+              {/* Customer Name */}
+              <label className="text-xs font-mono uppercase tracking-wider text-slate-300">
+                Your Full Name *
+                <input
+                  required
+                  type="text"
+                  value={customerName}
+                  onChange={e => setCustomerName(e.target.value)}
+                  placeholder="e.g. Kwame Mensah"
+                  className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none focus:border-cyan-400 font-sans"
+                />
+              </label>
+
+              {/* Customer Phone */}
+              <label className="text-xs font-mono uppercase tracking-wider text-slate-300">
+                Phone / WhatsApp Number *
+                <input
+                  required
+                  type="tel"
+                  value={customerPhone}
+                  onChange={e => setCustomerPhone(e.target.value)}
+                  placeholder="e.g. 0552117787"
+                  className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none focus:border-cyan-400 font-sans"
+                />
+              </label>
+
+              {/* Email (Optional for guest) */}
+              <label className="text-xs font-mono uppercase tracking-wider text-slate-300">
+                Email Address (Optional)
+                <input
+                  type="email"
+                  value={customerEmail}
+                  onChange={e => setCustomerEmail(e.target.value)}
+                  placeholder="customer@gmail.com"
+                  className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none focus:border-cyan-400 font-sans"
+                />
+              </label>
+
+              {/* Fulfillment */}
+              <label className="text-xs font-mono uppercase tracking-wider text-slate-300">
+                Delivery Preference *
+                <select
+                  value={fulfillmentMethod}
+                  onChange={e => setFulfillmentMethod(e.target.value as FulfillmentMethod)}
+                  className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none focus:border-cyan-400 font-sans"
+                >
+                  <option value="delivery">Nationwide Doorstep Delivery</option>
+                  <option value="pickup">Direct Lab/Office Pickup</option>
+                </select>
+              </label>
+
+              {/* Address */}
+              {fulfillmentMethod === 'delivery' && (
+                <label className="text-xs font-mono uppercase tracking-wider text-slate-300 sm:col-span-2">
+                  Delivery Location / Street Address *
+                  <textarea
+                    required
+                    rows={2}
+                    value={deliveryAddress}
+                    onChange={e => setDeliveryAddress(e.target.value)}
+                    placeholder="e.g. House No. 14, Ring Road Central, Tamale or KNUST Campus Hall 4"
+                    className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none focus:border-cyan-400 font-sans"
+                  />
+                </label>
+              )}
+
+              {formError && (
+                <p role="alert" className="text-xs text-red-300 bg-red-500/10 border border-red-500/30 p-3 rounded-xl sm:col-span-2">
+                  {formError}
+                </p>
+              )}
+
+              {successMessage && (
+                <p role="status" className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 p-3 rounded-xl sm:col-span-2">
+                  {successMessage}
+                </p>
+              )}
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={saving}
+                className="sm:col-span-2 rounded-xl bg-gradient-to-r from-cyan-500 via-sky-400 to-purple-600 px-6 py-4 text-sm font-bold uppercase tracking-wider text-black shadow-lg shadow-cyan-500/25 hover:opacity-95 transition-all disabled:opacity-50 cursor-pointer"
+              >
+                {saving ? 'Processing Order...' : 'Submit Order & View Payment Info'}
+              </button>
+            </form>
+          </section>
         )
       )}
 
@@ -962,11 +962,10 @@ ALTER TABLE public.gkb_orders ADD CONSTRAINT gkb_orders_status_check
                           type="button"
                           disabled={updatingOrderId === order.id || order.status === st}
                           onClick={() => void handleStatusChange(order, st)}
-                          className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
-                            order.status === st
+                          className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${order.status === st
                               ? st === 'cancelled' ? 'bg-red-500 text-white' : 'bg-cyan-500 text-black'
                               : 'bg-slate-950 border border-slate-700 text-slate-300 hover:border-cyan-400'
-                          } disabled:opacity-40 cursor-pointer`}
+                            } disabled:opacity-40 cursor-pointer`}
                         >
                           {statusLabels[st]}
                         </button>

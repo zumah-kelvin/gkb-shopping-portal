@@ -68,76 +68,130 @@ const inventoryImageBucket = 'gkb-device-images';
 
 // Category parsing helper for backward compatibility with database rows
 export function parseCategory(item: { category?: string; title?: string; brand?: string; highlights?: string }): ProductCategory {
-  if (item.category) {
-    const c = item.category.toLowerCase();
-    if (c.includes('phone') || c.includes('mobile')) return 'phones';
-    if (c.includes('gadget') || c.includes('accessory') || c.includes('hardware')) return 'gadgets';
-    return 'laptops';
+  // 1. Explicit native category column
+  if (item.category && typeof item.category === 'string') {
+    const c = item.category.trim().toLowerCase();
+    if (c === 'phones' || c === 'phone' || c.includes('mobile')) return 'phones';
+    if (c === 'gadgets' || c === 'gadget' || c.includes('accessory')) return 'gadgets';
+    if (c === 'laptops' || c === 'laptop' || c.includes('computer')) return 'laptops';
   }
-  const text = `${item.title || ''} ${item.brand || ''} ${item.highlights || ''}`.toLowerCase();
-  if (
-    text.includes('[category: mobile phones]') ||
-    text.includes('[category: phones]') ||
-    text.includes('iphone') ||
-    text.includes('smartphone') ||
-    text.includes('samsung galaxy') ||
-    text.includes('tecno') ||
-    text.includes('infinix') ||
-    text.includes('google pixel') ||
-    text.includes('xiaomi') ||
-    text.includes('redmi') ||
-    text.includes('oppo') ||
-    text.includes('vivo')
-  ) {
+
+  // 2. Check for explicit [Category: ...] tag in highlights
+  const h = item.highlights || '';
+  const catTagMatch = h.match(/\[\s*category\s*:\s*([^|\]]+)/i);
+  if (catTagMatch && catTagMatch[1]) {
+    const tag = catTagMatch[1].trim().toLowerCase();
+    if (tag.includes('phone') || tag.includes('mobile')) return 'phones';
+    if (tag.includes('gadget') || tag.includes('accessory')) return 'gadgets';
+    if (tag.includes('laptop') || tag.includes('computer')) return 'laptops';
+  }
+
+  const title = (item.title || '').toLowerCase();
+  const brand = (item.brand || '').toLowerCase();
+  const highlights = h.toLowerCase();
+
+  // 3. Check for Mobile Phones (Title, Brand, Model names)
+  const phoneKeywords = [
+    'iphone', 'smartphone', 'samsung galaxy', 'tecno', 'infinix',
+    'google pixel', 'xiaomi', 'redmi', 'oppo', 'vivo', 'realme',
+    'oneplus', 'galaxy s', 'galaxy a', 'galaxy note', 'galaxy z'
+  ];
+  if (phoneKeywords.some(kw => title.includes(kw) || brand.includes(kw))) {
     return 'phones';
   }
-  if (
-    text.includes('[category: electronic gadgets]') ||
-    text.includes('[category: gadgets]') ||
-    text.includes('hard drive') ||
-    text.includes('hdd') ||
-    text.includes('ssd') ||
-    text.includes('laptop stand') ||
-    text.includes('stand') ||
-    text.includes('mouse') ||
-    text.includes('keyboard') ||
-    text.includes('power bank') ||
-    text.includes('charger') ||
-    text.includes('hub') ||
-    text.includes('adapter') ||
-    text.includes('starter kit') ||
-    text.includes('esp32') ||
-    text.includes('gadget')
-  ) {
+
+  // 4. Check for standalone Electronic Gadgets & Peripherals (in Title & Brand ONLY)
+  // CRITICAL: Do NOT check 'ssd', 'hdd', or 'keyboard' in highlights, because every laptop has an SSD and keyboard!
+  const gadgetTitleKeywords = [
+    'stand', 'cooling pad', 'laptop stand', 'holder', 'mount',
+    'external hard drive', 'external hdd', 'portable ssd', 'backup plus',
+    'flash drive', 'thumb drive', 'usb drive', 'pen drive',
+    'mouse', 'wireless mouse', 'gaming mouse',
+    'power bank', 'charger', 'fast charger', 'charging cable',
+    'usb-c hub', 'docking station', 'dongle',
+    'headphone', 'headphones', 'earbud', 'earbuds', 'airpod', 'speaker',
+    'smartwatch', 'smart watch', 'fitness band',
+    'esp32', 'arduino', 'raspberry pi', 'starter kit', 'sensor module', 'iot kit'
+  ];
+  const gadgetBrands = [
+    'seagate', 'western digital', 'sandisk', 'logitech', 'anker',
+    'baseus', 'oraimo', 'ugreen', 'jbl', 'tp-link', 'gkb prototyping'
+  ];
+
+  const isPureGadgetBrand = gadgetBrands.some(gb => brand.includes(gb));
+  const isGadgetTitle = gadgetTitleKeywords.some(kw => title.includes(kw));
+
+  // If title is "Stand", "Lapto Stand", "Logitech Mouse", etc.
+  if (isGadgetTitle || (isPureGadgetBrand && !title.includes('laptop') && !title.includes('notebook') && !title.includes('elitebook') && !title.includes('latitude'))) {
     return 'gadgets';
   }
+
+  // 5. Check for Laptops & Computers (Brands, Models, Workstations, Desktops)
+  const laptopTerms = [
+    'latitude', 'precision', 'thinkpad', 'ideapad', 'elitebook', 'probook',
+    'spectre', 'envy', 'pavilion', 'macbook', 'zenbook', 'vivobook',
+    'surface', 'inspiron', 'vostro', 'xps', 'alienware', 'legion',
+    'omen', 'predator', 'yoga', 'swift', 'aspire', 'satellite',
+    'chromebook', 'notebook', 'workstation', 'desktop', 'all-in-one',
+    'eliteone', 'optiplex', 'prodesk', 'laptop', 'core i3', 'core i5',
+    'core i7', 'core i9', 'intel', 'ryzen', 'amd', 'quadcore',
+    'x360', 'convertible', 'generation', 'touchscreen'
+  ];
+  if (laptopTerms.some(term => title.includes(term) || brand.includes(term) || highlights.includes(term))) {
+    return 'laptops';
+  }
+
+  // Default fallback for GKB inventory is laptops
   return 'laptops';
 }
 
-export function parseGadgetType(highlights: string): string {
+export function parseGadgetType(itemOrHighlights: string | { title?: string; brand?: string; highlights?: string }): string {
+  const highlights = typeof itemOrHighlights === 'string' ? itemOrHighlights : (itemOrHighlights.highlights || '');
+  const title = typeof itemOrHighlights === 'string' ? '' : (itemOrHighlights.title || '');
+  const brand = typeof itemOrHighlights === 'string' ? '' : (itemOrHighlights.brand || '');
+
+  // 1. Check explicit Type tag in highlights
   const match = highlights.match(/\[Category:[^|\]]*\|\s*Type:\s*([^\]]+)\]/i);
   if (match && match[1]) return match[1].trim();
-  const h = highlights.toLowerCase();
-  if (h.includes('hard drive') || h.includes('hdd') || h.includes('ssd')) return 'External Hard Drive / SSD';
-  if (h.includes('stand') || h.includes('cooling pad')) return 'Laptop Stand / Cooling Pad';
-  if (h.includes('mouse') || h.includes('keyboard')) return 'Wireless Mouse / Keyboard';
-  if (h.includes('charger') || h.includes('power bank')) return 'Power Bank / Fast Charger';
-  if (h.includes('hub') || h.includes('dock')) return 'USB-C Hub / Docking Station';
-  if (h.includes('headphone') || h.includes('earbud') || h.includes('audio')) return 'Headphones & Audio';
-  if (h.includes('iot') || h.includes('esp32') || h.includes('sensor')) return 'Smart IoT & Hardware';
+
+  // 2. Check title, brand, and highlights
+  const text = `${title} ${brand} ${highlights}`.toLowerCase();
+  if (text.includes('stand') || text.includes('cooling pad') || text.includes('posture') || text.includes('holder')) {
+    return 'Laptop Stand / Cooling Pad';
+  }
+  if (text.includes('external') || text.includes('portable') || text.includes('backup plus') || text.includes('flash drive') || text.includes('hard drive') || text.includes('thumb drive')) {
+    return 'External Hard Drive / SSD';
+  }
+  if (text.includes('mouse') || (text.includes('keyboard') && !text.includes('keyboard light') && !text.includes('backlit'))) {
+    return 'Wireless Mouse / Keyboard';
+  }
+  if (text.includes('power bank') || text.includes('charger') || text.includes('adapter') || text.includes('cable')) {
+    return 'Power Bank / Fast Charger';
+  }
+  if (text.includes('hub') || text.includes('dock') || text.includes('dongle')) {
+    return 'USB-C Hub / Docking Station';
+  }
+  if (text.includes('headphone') || text.includes('earbud') || text.includes('audio') || text.includes('speaker') || text.includes('airpod')) {
+    return 'Headphones & Audio';
+  }
+  if (text.includes('iot') || text.includes('esp32') || text.includes('arduino') || text.includes('sensor') || text.includes('starter kit')) {
+    return 'Smart IoT & Hardware';
+  }
+
   return 'Electronic Gadget';
 }
 
 // Clean highlights text by stripping internal metadata tags for display
 export function cleanHighlights(text: string): string {
+  if (!text) return '';
   return text
-    .replace(/\[Category:[^\]]+\]\s*/g, '')
-    .replace(/\[Vendor:[^\]]+\]\s*/g, '')
+    .replace(/\[\s*Category:[^\]]*\]\s*/gi, '')
+    .replace(/\[\s*Vendor:[^\]]*\]\s*/gi, '')
     .trim();
 }
 
 // Vendor parsing helper for multi-vendor marketplace
-export function parseVendor(item: { highlights?: string; vendor_id?: string; vendor_name?: string; vendor_phone?: string; [key: string]: any }): {
+export function parseVendor(item: { highlights?: string; vendor_id?: string; vendor_name?: string; vendor_phone?: string;[key: string]: any }): {
   vendorId?: string;
   vendorName: string;
   vendorPhone: string;
@@ -380,6 +434,7 @@ export default function ShoppingPortal() {
   const isVendor = Boolean(user && user.role === 'vendor');
   const canManageInventory = isAdmin || isVendor;
 
+  // Price editing state (Strictly Admin Only)
   // Multi-Vendor filter on catalog
   const [selectedVendorFilter, setSelectedVendorFilter] = useState('all');
 
@@ -544,7 +599,7 @@ export default function ShoppingPortal() {
       } else if (data && data.length > 0) {
         setInventoryItems(data.map(item => {
           const category = parseCategory(item);
-          const gadgetType = category === 'gadgets' ? parseGadgetType(item.highlights || '') : undefined;
+          const gadgetType = category === 'gadgets' ? parseGadgetType(item) : undefined;
           const vendor = parseVendor(item);
           return {
             ...item,
@@ -652,6 +707,7 @@ export default function ShoppingPortal() {
     setActiveTab('catalog');
   };
 
+  // Add Inventory item (Admin)
   // Add Inventory item (Admin or Vendor)
   const handleAddInventoryItem = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -661,1076 +717,1080 @@ export default function ShoppingPortal() {
       setInventoryError('Only authorized administrators or registered vendors can add retail inventory.');
       return;
     }
-    if (!inventoryImage) {
-      setInventoryError('Please choose a product image to upload.');
-      return;
-    }
-    const price = Number(inventoryPrice);
-    if (!Number.isFinite(price) || price <= 0) {
-      setInventoryError('Please enter a valid price greater than zero.');
-      return;
-    }
-
-    const effectiveBrand = inventoryBrandSelect === 'Other (Custom Brand)'
-      ? (inventoryCustomBrand.trim() || 'Custom Brand')
-      : inventoryBrandSelect;
-
-    setInventoryBusy(true);
-    let uploadedImagePath: string | null = null;
-    try {
-      const ext = inventoryImage.type === 'image/jpeg' ? 'jpg' : inventoryImage.type === 'image/png' ? 'png' : 'webp';
-      const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
-      const { error: uploadError } = await relaySupabase.storage
-        .from(inventoryImageBucket)
-        .upload(path, inventoryImage, { contentType: inventoryImage.type });
-      if (uploadError) throw uploadError;
-      uploadedImagePath = path;
-
-      // Category metadata header embedded into highlights for zero-friction schema backward compatibility
-      const categoryLabel = inventoryCategory === 'phones'
-        ? 'Mobile Phones'
-        : inventoryCategory === 'gadgets'
-        ? 'Electronic Gadgets'
-        : 'Laptops';
-
-      const categoryTag = inventoryCategory === 'gadgets'
-        ? `[Category: ${categoryLabel} | Type: ${inventoryGadgetType}${inventoryGadgetCapacity !== 'None / N/A' ? ` | Capacity: ${inventoryGadgetCapacity}` : ''}]`
-        : `[Category: ${categoryLabel}]`;
-
-      // Determine listing vendor
-      const activeVendorName = isVendor
-        ? (user.businessName || [user.firstName, user.lastName].filter(Boolean).join(' ') || 'Verified Vendor')
-        : (vendorAssignment === 'New Custom Vendor' ? (vendorCustomAssignName.trim() || 'Third-Party Vendor') : vendorAssignment);
-
-      const activeVendorPhone = isVendor
-        ? (user.phone || '0552117787')
-        : (vendorAssignment === 'New Custom Vendor' ? (vendorCustomAssignPhone.trim() || '0552117787') : '0552117787');
-
-      const activeVendorId = isVendor ? user.id : undefined;
-      const isOfficialStore = activeVendorName.toLowerCase().includes('gkb') || activeVendorName.toLowerCase().includes('official');
-
-      const vendorTag = isOfficialStore
-        ? '[Vendor: GKB Official Store | Phone: 0552117787]'
-        : `[Vendor: ${activeVendorName} | Phone: ${activeVendorPhone}${activeVendorId ? ` | UID: ${activeVendorId}` : ''}]`;
-
-      const enrichedHighlights = `${categoryTag}\n${vendorTag}\n${inventoryHighlights.trim()}`;
-
-      // In case database has strict check constraint on ram/storage, provide fallback valid values
-      const dbRam = inventoryCategory === 'gadgets' ? '4GB' : inventoryRam;
-      const dbStorage = inventoryCategory === 'gadgets'
-        ? (inventoryGadgetCapacity.includes('GB') || inventoryGadgetCapacity.includes('TB') ? inventoryGadgetCapacity : '128GB')
-        : inventoryStorage;
-
-      const payload: Record<string, any> = {
-        brand: effectiveBrand,
-        title: inventoryTitle.trim(),
-        highlights: enrichedHighlights,
-        price,
-        ram: dbRam,
-        storage: dbStorage,
-        image_path: path
-      };
-
-      // Try inserting with native vendor and category columns
-      let result = await relaySupabase
-        .from('gkb_inventory_items')
-        .insert({
-          ...payload,
-          category: inventoryCategory,
-          vendor_id: activeVendorId,
-          vendor_name: activeVendorName,
-          vendor_phone: activeVendorPhone
-        })
-        .select()
-        .single();
-
-      // Graceful fallbacks if vendor or category columns don't exist yet in Supabase
-      if (result.error) {
-        result = await relaySupabase
-          .from('gkb_inventory_items')
-          .insert({ ...payload, category: inventoryCategory })
-          .select()
-          .single();
-
-        if (result.error) {
-          result = await relaySupabase
-            .from('gkb_inventory_items')
-            .insert(payload)
-            .select()
-            .single();
-        }
+      if (!inventoryImage) {
+        setInventoryError('Please choose a product image to upload.');
+        return;
       }
-
-      if (result.error) throw result.error;
-      const data = result.data;
-
-      const newItem: InventoryItem = {
-        ...data,
-        price: Number(data.price),
-        category: inventoryCategory,
-        gadgetType: inventoryCategory === 'gadgets' ? inventoryGadgetType : undefined,
-        storage: inventoryCategory === 'gadgets' && inventoryGadgetCapacity !== 'None / N/A' ? inventoryGadgetCapacity : data.storage,
-        ram: inventoryCategory === 'gadgets' ? 'N/A' : data.ram,
-        vendorId: activeVendorId || data.vendor_id,
-        vendorName: activeVendorName,
-        vendorPhone: activeVendorPhone,
-        isOfficial: isOfficialStore
-      };
-
-      setInventoryItems(current => [newItem, ...current]);
-      setInventoryTitle('');
-      setInventoryHighlights('');
-      setInventoryPrice('');
-      setInventoryCustomBrand('');
-      setInventoryImage(null);
-      setInventoryMessage(`${categoryLabel} published to live storefront under "${activeVendorName}" successfully!`);
-    } catch (error) {
-      setInventoryError(error instanceof Error ? error.message : 'Failed to add product.');
-    } finally {
-      setInventoryBusy(false);
-    }
-  };
-
-  // Archive item toggle (Admin or Item Owner Vendor)
-  const handleToggleInventoryItem = async (item: InventoryItem) => {
-    if (!isItemOwner(item) || !relaySupabase) return;
-    try {
-      const { data, error } = await relaySupabase
-        .from('gkb_inventory_items')
-        .update({ active: !item.active, updated_at: new Date().toISOString() })
-        .eq('id', item.id)
-        .select()
-        .single();
-      if (error) throw error;
-      setInventoryItems(current => current.map(dev => dev.id === item.id ? { ...dev, ...data, price: Number(data.price) } as InventoryItem : dev));
-    } catch (error) {
-      console.error('Failed to update product state:', error);
-    }
-  };
-
-  // Price editing handlers (Admin or Item Owner Vendor)
-  const handleStartEditPrice = (item: InventoryItem) => {
-    if (!isItemOwner(item)) return;
-    setEditingPriceItemId(item.id);
-    setEditPriceValue(item.price.toString());
-    setPriceEditError('');
-    setPriceEditSuccess('');
-  };
-
-  const handleCancelEditPrice = () => {
-    setEditingPriceItemId(null);
-    setEditPriceValue('');
-    setPriceEditError('');
-  };
-
-  const handleSavePrice = async (item: InventoryItem) => {
-    if (!isItemOwner(item) || !relaySupabase) return;
-    const newPrice = parseFloat(editPriceValue);
-    if (isNaN(newPrice) || newPrice <= 0) {
-      setPriceEditError('Please enter a valid positive price in GHS (e.g. 3500.00).');
-      return;
-    }
-    setPriceSavingId(item.id);
-    setPriceEditError('');
-    try {
-      const { data, error } = await relaySupabase
-        .from('gkb_inventory_items')
-        .update({
-          price: newPrice,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', item.id)
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      setInventoryItems(current =>
-        current.map(dev =>
-          dev.id === item.id
-            ? ({
-                ...dev,
-                ...data,
-                price: Number(data.price)
-              } as InventoryItem)
-            : dev
-        )
-      );
-      setEditingPriceItemId(null);
-      setPriceEditSuccess(`Price for "${item.title}" successfully updated to GHS ${newPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}!`);
-      setTimeout(() => setPriceEditSuccess(''), 4000);
-    } catch (err: unknown) {
-      console.error('Failed to update price:', err);
-      const msg = err instanceof Error ? err.message : (typeof err === 'object' && err !== null && 'message' in err) ? String((err as { message: unknown }).message) : 'Failed to update price in Supabase.';
-      setPriceEditError(msg);
-    } finally {
-      setPriceSavingId(null);
-    }
-  };
-
-  const handleOrderProduct = (product: InventoryItem) => {
-    setSelectedOrderProduct(product.title);
-    setSelectedOrderPrice(product.price);
-
-    if (!user) {
-      setLoginError('');
-      setLoginMessage(`Please sign in or create an account to proceed with ordering "${product.brand} ${product.title}".`);
-      setLoginModalOpen(true);
-      return;
-    }
-
-    setActiveTab('order');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  // Category switch helper for admin form
-  const handleAdminCategoryChange = (cat: ProductCategory) => {
-    setInventoryCategory(cat);
-    if (cat === 'laptops') {
-      setInventoryBrandSelect(laptopBrandOptions[0]);
-      setInventoryRam(laptopRamOptions[2]); // 16GB
-      setInventoryStorage(laptopStorageOptions[2]); // 512GB
-    } else if (cat === 'phones') {
-      setInventoryBrandSelect(phoneBrandOptions[0]);
-      setInventoryRam(phoneRamOptions[2]); // 6GB
-      setInventoryStorage(phoneStorageOptions[1]); // 128GB
-    } else {
-      setInventoryBrandSelect(gadgetBrandOptions[0]);
-      setInventoryGadgetType(gadgetTypeOptions[0]);
-      setInventoryGadgetCapacity(gadgetCapacityOptions[5]); // 1TB
-      setInventoryRam('N/A');
-    }
-  };
-
-  // Smart Analyzer for WhatsApp broadcasts, supplier text, and raw specs
-  const handleSmartParseSpecs = () => {
-    if (!smartParseText.trim()) {
-      setSmartParseError('Please paste some product specs or broadcast text first.');
-      return;
-    }
-    setSmartParseError(null);
-    setSmartParseSuccess(null);
-    setSmartParseDetails([]);
-
-    try {
-      const rawLines = smartParseText
-        .split(/\r?\n/)
-        .map(l => l.trim())
-        .filter(Boolean);
-
-      if (rawLines.length === 0) {
-        setSmartParseError('No text lines found to analyze.');
+      const price = Number(inventoryPrice);
+      if (!Number.isFinite(price) || price <= 0) {
+        setInventoryError('Please enter a valid price greater than zero.');
         return;
       }
 
-      const cleanLine = (s: string) => s.replace(/^[*_~•\-\s]+|[*_~•\-\s]+$/g, '').trim();
-      const fullLower = smartParseText.toLowerCase();
+      const effectiveBrand = inventoryBrandSelect === 'Other (Custom Brand)'
+        ? (inventoryCustomBrand.trim() || 'Custom Brand')
+        : inventoryBrandSelect;
 
-      // 1. Detect Category
-      let detectedCategory: ProductCategory = 'laptops';
-      const isPhone = /\b(iphone|galaxy\s*[as]\d|redmi|infinix|tecno|pixel|huawei|oppo|vivo|oneplus|dual\s*sim|battery\s*health|ios)\b/i.test(fullLower);
-      const isGadget = /\b(external\s*hard\s*drive|power\s*bank|portable\s*charger|cooling\s*pad|docking\s*station|wireless\s*mouse|wireless\s*keyboard|bluetooth\s*speaker|earbuds|headphones|smart\s*iot|smart\s*relay)\b/i.test(fullLower);
-      const isLaptop = /\b(laptop|notebook|ultrabook|precision|thinkpad|elitebook|latitude|probook|macbook|x360|convertible|intel|core\s*i[3579]|ryzen|ddr[345]|touchscreen|fhd|ips|workstation)\b/i.test(fullLower);
+      setInventoryBusy(true);
+      let uploadedImagePath: string | null = null;
+      try {
+        const ext = inventoryImage.type === 'image/jpeg' ? 'jpg' : inventoryImage.type === 'image/png' ? 'png' : 'webp';
+        const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
+        const { error: uploadError } = await relaySupabase.storage
+          .from(inventoryImageBucket)
+          .upload(path, inventoryImage, { contentType: inventoryImage.type });
+        if (uploadError) throw uploadError;
+        uploadedImagePath = path;
 
-      if (isLaptop) {
-        detectedCategory = 'laptops';
-      } else if (isPhone) {
-        detectedCategory = 'phones';
-      } else if (isGadget) {
-        detectedCategory = 'gadgets';
-      }
+        // Category metadata header embedded into highlights for zero-friction schema backward compatibility
+        const categoryLabel = inventoryCategory === 'phones'
+          ? 'Mobile Phones'
+          : inventoryCategory === 'gadgets'
+            ? 'Electronic Gadgets'
+            : 'Laptops';
 
-      // 2. Detect Brand
-      let detectedBrand = 'Other (Custom Brand)';
-      let detectedCustomBrand = '';
+        const categoryTag = inventoryCategory === 'gadgets'
+          ? `[Category: ${categoryLabel} | Type: ${inventoryGadgetType}${inventoryGadgetCapacity !== 'None / N/A' ? ` | Capacity: ${inventoryGadgetCapacity}` : ''}]`
+          : `[Category: ${categoryLabel}]`;
 
-      const brandMatches: Array<{ brand: string; test: RegExp; category?: ProductCategory }> = [
-        { brand: 'Dell', test: /\b(dell|precision|latitude|xps|inspiron|vostro|alienware)\b/i, category: 'laptops' },
-        { brand: 'HP', test: /\b(hp|hewlett|elitebook|probook|omen|pavilion|spectre|envy)\b/i, category: 'laptops' },
-        { brand: 'Lenovo', test: /\b(lenovo|thinkpad|ideapad|legion|yoga)\b/i, category: 'laptops' },
-        { brand: 'Apple', test: /\b(macbook|imac|mac\s*mini|apple\s*silicon|m[1234])\b/i, category: 'laptops' },
-        { brand: 'Apple (iPhone)', test: /\b(iphone|apple)\b/i, category: 'phones' },
-        { brand: 'Samsung', test: /\b(samsung|galaxy)\b/i },
-        { brand: 'Asus', test: /\b(asus|zenbook|vivobook|rog|tuf)\b/i, category: 'laptops' },
-        { brand: 'Acer', test: /\b(acer|aspire|predator|nitro|swift)\b/i, category: 'laptops' },
-        { brand: 'Toshiba', test: /\b(toshiba|dynabook)\b/i, category: 'laptops' },
-        { brand: 'MSI', test: /\b(msi)\b/i, category: 'laptops' },
-        { brand: 'Microsoft Surface', test: /\b(surface|microsoft\s*surface)\b/i, category: 'laptops' },
-        { brand: 'Tecno', test: /\b(tecno|camon|spark|phantom)\b/i, category: 'phones' },
-        { brand: 'Infinix', test: /\b(infinix|hot|note|zero)\b/i, category: 'phones' },
-        { brand: 'Google Pixel', test: /\b(pixel|google\s*pixel)\b/i, category: 'phones' },
-        { brand: 'Xiaomi / Redmi', test: /\b(xiaomi|redmi|poco)\b/i, category: 'phones' },
-        { brand: 'Huawei', test: /\b(huawei)\b/i },
-        { brand: 'Oppo', test: /\b(oppo)\b/i, category: 'phones' },
-        { brand: 'Vivo', test: /\b(vivo)\b/i, category: 'phones' },
-        { brand: 'OnePlus', test: /\b(oneplus)\b/i, category: 'phones' },
-      ];
+        // Determine listing vendor
+        const activeVendorName = isVendor
+          ? (user.businessName || [user.firstName, user.lastName].filter(Boolean).join(' ') || 'Verified Vendor')
+          : (vendorAssignment === 'New Custom Vendor' ? (vendorCustomAssignName.trim() || 'Third-Party Vendor') : vendorAssignment);
 
-      for (const bm of brandMatches) {
-        if (bm.test.test(fullLower)) {
-          detectedBrand = bm.brand;
-          if (bm.category && !isLaptop) {
-            detectedCategory = bm.category;
+        const activeVendorPhone = isVendor
+          ? (user.phone || '0552117787')
+          : (vendorAssignment === 'New Custom Vendor' ? (vendorCustomAssignPhone.trim() || '0552117787') : '0552117787');
+
+        const activeVendorId = isVendor ? user.id : undefined;
+        const isOfficialStore = activeVendorName.toLowerCase().includes('gkb') || activeVendorName.toLowerCase().includes('official');
+
+        const vendorTag = isOfficialStore
+          ? '[Vendor: GKB Official Store | Phone: 0552117787]'
+          : `[Vendor: ${activeVendorName} | Phone: ${activeVendorPhone}${activeVendorId ? ` | UID: ${activeVendorId}` : ''}]`;
+
+        const enrichedHighlights = `${categoryTag}\n${vendorTag}\n${inventoryHighlights.trim()}`;
+
+        // In case database has strict check constraint on ram/storage, provide fallback valid values
+        const dbRam = inventoryCategory === 'gadgets' ? '4GB' : inventoryRam;
+        const dbStorage = inventoryCategory === 'gadgets'
+          ? (inventoryGadgetCapacity.includes('GB') || inventoryGadgetCapacity.includes('TB') ? inventoryGadgetCapacity : '128GB')
+          : inventoryStorage;
+
+        const payload: Record<string, any> = {
+          brand: effectiveBrand,
+          title: inventoryTitle.trim(),
+          highlights: enrichedHighlights,
+          price,
+          ram: dbRam,
+          storage: dbStorage,
+          image_path: path
+        };
+
+        // Try inserting with native vendor and category columns
+        let result = await relaySupabase
+          .from('gkb_inventory_items')
+          .insert({
+            ...payload,
+            category: inventoryCategory,
+            vendor_id: activeVendorId,
+            vendor_name: activeVendorName,
+            vendor_phone: activeVendorPhone
+          })
+          .select()
+          .single();
+
+        // Graceful fallbacks if vendor or category columns don't exist yet in Supabase
+        if (result.error) {
+          result = await relaySupabase
+            .from('gkb_inventory_items')
+            .insert({ ...payload, category: inventoryCategory })
+            .select()
+            .single();
+
+          if (result.error) {
+            result = await relaySupabase
+              .from('gkb_inventory_items')
+              .insert(payload)
+              .select()
+              .single();
           }
-          break;
         }
+
+        if (result.error) throw result.error;
+        const data = result.data;
+
+        const newItem: InventoryItem = {
+          ...data,
+          price: Number(data.price),
+          category: inventoryCategory,
+          gadgetType: inventoryCategory === 'gadgets' ? inventoryGadgetType : undefined,
+          storage: inventoryCategory === 'gadgets' && inventoryGadgetCapacity !== 'None / N/A' ? inventoryGadgetCapacity : data.storage,
+          ram: inventoryCategory === 'gadgets' ? 'N/A' : data.ram,
+          vendorId: activeVendorId || data.vendor_id,
+          vendorName: activeVendorName,
+          vendorPhone: activeVendorPhone,
+          isOfficial: isOfficialStore
+        };
+
+        setInventoryItems(current => [newItem, ...current]);
+        setInventoryTitle('');
+        setInventoryHighlights('');
+        setInventoryPrice('');
+        setInventoryCustomBrand('');
+        setInventoryImage(null);
+        setInventoryMessage(`${categoryLabel} published to live storefront under "${activeVendorName}" successfully!`);
+      } catch (error) {
+        setInventoryError(error instanceof Error ? error.message : 'Failed to add product.');
+      } finally {
+        setInventoryBusy(false);
       }
+    };
 
-      // 3. Detect Price (typically near bottom or labeled with currency)
-      let detectedPrice = '';
-      let priceLineIndex = -1;
-
-      // Bottom-up search for standalone or formatted numbers
-      for (let i = rawLines.length - 1; i >= 0; i--) {
-        const lineClean = cleanLine(rawLines[i]);
-        const priceMatch = lineClean.match(/^(?:(?:ghs|gh₵|gh|cedis|price|¢)[:\s]*)?([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{3,6})(?:\.00|\/-)?(?:\s*(?:ghs|gh₵|gh|cedis|¢))?$/i);
-        if (priceMatch) {
-          const val = priceMatch[1].replace(/,/g, '');
-          const num = parseFloat(val);
-          if (!isNaN(num) && num >= 50 && num <= 250000) {
-            detectedPrice = val;
-            priceLineIndex = i;
-            break;
-          }
+    // Archive item toggle (Admin or Item Owner Vendor)
+    const handleToggleInventoryItem = async (item: InventoryItem) => {
+      if (!isItemOwner(item) || !relaySupabase) return;
+        try {
+          const { data, error } = await relaySupabase
+            .from('gkb_inventory_items')
+            .update({ active: !item.active, updated_at: new Date().toISOString() })
+            .eq('id', item.id)
+            .select()
+            .single();
+          if (error) throw error;
+          setInventoryItems(current => current.map(dev => dev.id === item.id ? { ...data, price: Number(data.price), category: item.category, gadgetType: item.gadgetType } as InventoryItem : dev));
+          setInventoryItems(current => current.map(dev => dev.id === item.id ? { ...dev, ...data, price: Number(data.price) } as InventoryItem : dev));
+        } catch (error) {
+          console.error('Failed to update product state:', error);
         }
-      }
-
-      // Fallback search anywhere in text for "GHS 4490" etc.
-      if (!detectedPrice) {
-        const labeledMatch = fullLower.match(/(?:ghs|gh₵|gh|cedis|price|¢)[:\s]*([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{3,6})/i);
-        if (labeledMatch) {
-          detectedPrice = labeledMatch[1].replace(/,/g, '');
-        }
-      }
-
-      // 4. Detect RAM
-      let detectedRam = '';
-      const ramMatch = fullLower.match(/\b(4|6|8|12|16|24|32|64)\s*(?:gb|g)\s*(?:ddr[345]|ram|memory|lpddr[45])?\b/i);
-      if (ramMatch) {
-        const ramNum = ramMatch[1];
-        if (detectedCategory === 'laptops') {
-          const match = laptopRamOptions.find(o => o.startsWith(`${ramNum}GB`));
-          detectedRam = match || `${ramNum}GB`;
-        } else if (detectedCategory === 'phones') {
-          const match = phoneRamOptions.find(o => o.startsWith(`${ramNum}GB`));
-          detectedRam = match || `${ramNum}GB`;
-        }
-      }
-
-      // 5. Detect Storage
-      let detectedStorage = '';
-      const storageMatch = fullLower.match(/\b(64|128|256|512)\s*gb\b|\b([124])\s*tb\b/i);
-      if (storageMatch) {
-        const cleanStorage = storageMatch[0].toUpperCase().replace(/\s+/g, '');
-        if (detectedCategory === 'laptops') {
-          const match = laptopStorageOptions.find(o => o === cleanStorage || o.startsWith(cleanStorage));
-          detectedStorage = match || cleanStorage;
-        } else if (detectedCategory === 'phones') {
-          const match = phoneStorageOptions.find(o => o === cleanStorage || o.startsWith(cleanStorage));
-          detectedStorage = match || cleanStorage;
-        }
-      }
-
-      // 6. Detect Title / Model (First non-empty line that isn't just the price)
-      let candidateTitle = '';
-      for (let i = 0; i < rawLines.length; i++) {
-        if (i === priceLineIndex) continue;
-        const l = cleanLine(rawLines[i]);
-        if (l.length >= 3 && !/^\d+$/.test(l)) {
-          candidateTitle = l;
-          break;
-        }
-      }
-
-      const formatTitleWord = (w: string) => {
-        const wl = w.toLowerCase();
-        if (/^(i[3579]|ssd|hdd|ram|fhd|uhd|oled|ips|4k|2k|x360|m[1234]|ddr[345]|gb|tb)$/i.test(wl)) return w.toUpperCase();
-        if (/^\d+[a-z]?$/i.test(wl)) return w.toUpperCase();
-        return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
       };
 
-      let finalTitle = candidateTitle
-        .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
-        .split(/\s+/)
-        .filter(Boolean)
-        .map(formatTitleWord)
-        .join(' ');
+      // Price editing handlers (Strictly Admin Only)
+      // Price editing handlers (Admin or Item Owner Vendor)
+      const handleStartEditPrice = (item: InventoryItem) => {
+        if (!isAdmin) return;
+        if (!isItemOwner(item)) return;
+        setEditingPriceItemId(item.id);
+        setEditPriceValue(item.price.toString());
+        setPriceEditError('');
+        setPriceEditSuccess('');
+      };
 
-      if (!finalTitle) {
-        finalTitle = `${detectedBrand} Product`;
-      }
+      const handleCancelEditPrice = () => {
+        setEditingPriceItemId(null);
+        setEditPriceValue('');
+        setPriceEditError('');
+      };
 
-      // 7. Compile Highlights
-      const highlightsList: string[] = [];
-      for (let i = 0; i < rawLines.length; i++) {
-        if (i === priceLineIndex) continue;
-        const cl = cleanLine(rawLines[i]);
-        if (cl === cleanLine(candidateTitle)) continue;
-        if (detectedPrice && cl === detectedPrice) continue;
-        if (cl.length > 1) {
-          highlightsList.push(cl);
+      const handleSavePrice = async (item: InventoryItem) => {
+        if (!isAdmin || !relaySupabase) return;
+        if (!isItemOwner(item) || !relaySupabase) return;
+        const newPrice = parseFloat(editPriceValue);
+        if (isNaN(newPrice) || newPrice <= 0) {
+          setPriceEditError('Please enter a valid positive price in GHS (e.g. 3500.00).');
+          return;
         }
-      }
-      const finalHighlights = highlightsList.join(' · ');
+        setPriceSavingId(item.id);
+        setPriceEditError('');
+        try {
+          const { data, error } = await relaySupabase
+            .from('gkb_inventory_items')
+            .update({
+              price: newPrice,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', item.id)
+            .select()
+            .single();
 
-      // Apply values to Form State
-      setInventoryCategory(detectedCategory);
+          if (error) throw error;
 
-      const currentBrandList = detectedCategory === 'laptops'
-        ? laptopBrandOptions
-        : detectedCategory === 'phones'
-        ? phoneBrandOptions
-        : gadgetBrandOptions;
+          setInventoryItems(current =>
+            current.map(dev =>
+              dev.id === item.id
+                ? ({
+                  ...dev,
+                  ...data,
+                  price: Number(data.price),
+                  category: dev.category,
+                  gadgetType: dev.gadgetType
+                } as InventoryItem)
+                : dev
+            )
+          );
+          setEditingPriceItemId(null);
+          setPriceEditSuccess(`Price for "${item.title}" successfully updated to GHS ${newPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}!`);
+          setTimeout(() => setPriceEditSuccess(''), 4000);
+        } catch (err: unknown) {
+          console.error('Failed to update price:', err);
+          const msg = err instanceof Error ? err.message : (typeof err === 'object' && err !== null && 'message' in err) ? String((err as { message: unknown }).message) : 'Failed to update price in Supabase.';
+          setPriceEditError(msg);
+        } finally {
+          setPriceSavingId(null);
+        }
+      };
 
-      if (currentBrandList.includes(detectedBrand)) {
-        setInventoryBrandSelect(detectedBrand);
-        setInventoryCustomBrand('');
-      } else {
-        setInventoryBrandSelect('Other (Custom Brand)');
-        setInventoryCustomBrand(detectedCustomBrand || detectedBrand !== 'Other (Custom Brand)' ? detectedBrand : '');
-      }
+      const handleOrderProduct = (product: InventoryItem) => {
+        setSelectedOrderProduct(product.title);
+        setSelectedOrderPrice(product.price);
 
-      setInventoryTitle(finalTitle);
-      if (detectedPrice) setInventoryPrice(detectedPrice);
-      if (detectedRam) setInventoryRam(detectedRam);
-      if (detectedStorage) setInventoryStorage(detectedStorage);
-      if (finalHighlights) setInventoryHighlights(finalHighlights);
+        if (!user) {
+          setLoginError('');
+          setLoginMessage(`Please sign in or create an account to proceed with ordering "${product.brand} ${product.title}".`);
+          setLoginModalOpen(true);
+          return;
+        }
 
-      const details: string[] = [];
-      details.push(`Category: ${detectedCategory.toUpperCase()}`);
-      details.push(`Brand: ${detectedBrand}`);
-      details.push(`Model: ${finalTitle}`);
-      if (detectedPrice) details.push(`Price: GHS ${Number(detectedPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}`);
-      if (detectedRam) details.push(`RAM: ${detectedRam}`);
-      if (detectedStorage) details.push(`Storage: ${detectedStorage}`);
+        setActiveTab('order');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
 
-      setSmartParseDetails(details);
-      setSmartParseSuccess(`Auto-filled ${details.length} fields! Please review the form, attach a product photo, and upload.`);
-    } catch (err: unknown) {
-      console.error('Smart parsing failed:', err);
-      setSmartParseError('Could not parse text. Please check the format and try again.');
-    }
-  };
+      // Category switch helper for admin form
+      const handleAdminCategoryChange = (cat: ProductCategory) => {
+        setInventoryCategory(cat);
+        if (cat === 'laptops') {
+          setInventoryBrandSelect(laptopBrandOptions[0]);
+          setInventoryRam(laptopRamOptions[2]); // 16GB
+          setInventoryStorage(laptopStorageOptions[2]); // 512GB
+        } else if (cat === 'phones') {
+          setInventoryBrandSelect(phoneBrandOptions[0]);
+          setInventoryRam(phoneRamOptions[2]); // 6GB
+          setInventoryStorage(phoneStorageOptions[1]); // 128GB
+        } else {
+          setInventoryBrandSelect(gadgetBrandOptions[0]);
+          setInventoryGadgetType(gadgetTypeOptions[0]);
+          setInventoryGadgetCapacity(gadgetCapacityOptions[5]); // 1TB
+          setInventoryRam('N/A');
+        }
+      };
 
-  // Filter products by category, gadgetType, search, brand, and vendor
-  const displayItems = inventoryItems.filter(item => {
-    if (!isAdmin && !isVendor && !item.active) return false;
-    const category = item.category || parseCategory(item);
-    const matchesCategory = selectedCategory === 'all' || category === selectedCategory;
+      // Smart Analyzer for WhatsApp broadcasts, supplier text, and raw specs
+      const handleSmartParseSpecs = () => {
+        if (!smartParseText.trim()) {
+          setSmartParseError('Please paste some product specs or broadcast text first.');
+          return;
+        }
+        setSmartParseError(null);
+        setSmartParseSuccess(null);
+        setSmartParseDetails([]);
 
-    const matchesGadgetType = selectedCategory !== 'gadgets' || selectedGadgetType === 'all' || (
-      (item.gadgetType && item.gadgetType.toLowerCase().includes(selectedGadgetType.toLowerCase())) ||
-      item.highlights.toLowerCase().includes(selectedGadgetType.toLowerCase())
-    );
+        try {
+          const rawLines = smartParseText
+            .split(/\r?\n/)
+            .map(l => l.trim())
+            .filter(Boolean);
 
-    const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (item.vendorName && item.vendorName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      cleanHighlights(item.highlights).toLowerCase().includes(searchQuery.toLowerCase());
+          if (rawLines.length === 0) {
+            setSmartParseError('No text lines found to analyze.');
+            return;
+          }
 
-    const matchesBrand = selectedBrand === 'All' || item.brand.toLowerCase() === selectedBrand.toLowerCase();
+          const cleanLine = (s: string) => s.replace(/^[*_~•\-\s]+|[*_~•\-\s]+$/g, '').trim();
+          const fullLower = smartParseText.toLowerCase();
 
-    const matchesVendor = selectedVendorFilter === 'all' || (
-      selectedVendorFilter === 'official'
-        ? Boolean(item.isOfficial)
-        : Boolean(item.vendorName && item.vendorName.toLowerCase() === selectedVendorFilter.toLowerCase())
-    );
+          // 1. Detect Category
+          let detectedCategory: ProductCategory = 'laptops';
+          const isPhone = /\b(iphone|galaxy\s*[as]\d|redmi|infinix|tecno|pixel|huawei|oppo|vivo|oneplus|dual\s*sim|battery\s*health|ios)\b/i.test(fullLower);
+          const isGadget = /\b(external\s*hard\s*drive|power\s*bank|portable\s*charger|cooling\s*pad|docking\s*station|wireless\s*mouse|wireless\s*keyboard|bluetooth\s*speaker|earbuds|headphones|smart\s*iot|smart\s*relay)\b/i.test(fullLower);
+          const isLaptop = /\b(laptop|notebook|ultrabook|precision|thinkpad|elitebook|latitude|probook|macbook|x360|convertible|intel|core\s*i[3579]|ryzen|ddr[345]|touchscreen|fhd|ips|workstation)\b/i.test(fullLower);
 
-    return matchesCategory && matchesGadgetType && matchesSearch && matchesBrand && matchesVendor;
-  });
+          if (isLaptop) {
+            detectedCategory = 'laptops';
+          } else if (isPhone) {
+            detectedCategory = 'phones';
+          } else if (isGadget) {
+            detectedCategory = 'gadgets';
+          }
 
-  const uniqueBrands = ['All', ...Array.from(new Set(
-    inventoryItems
-      .filter(item => selectedCategory === 'all' || (item.category || parseCategory(item)) === selectedCategory)
-      .map(i => i.brand)
-  ))];
+          // 2. Detect Brand
+          let detectedBrand = 'Other (Custom Brand)';
+          let detectedCustomBrand = '';
 
-  const availableVendors = Array.from(new Set(
-    inventoryItems.map(i => i.vendorName).filter(Boolean)
-  )) as string[];
+          const brandMatches: Array<{ brand: string; test: RegExp; category?: ProductCategory }> = [
+            { brand: 'Dell', test: /\b(dell|precision|latitude|xps|inspiron|vostro|alienware)\b/i, category: 'laptops' },
+            { brand: 'HP', test: /\b(hp|hewlett|elitebook|probook|omen|pavilion|spectre|envy)\b/i, category: 'laptops' },
+            { brand: 'Lenovo', test: /\b(lenovo|thinkpad|ideapad|legion|yoga)\b/i, category: 'laptops' },
+            { brand: 'Apple', test: /\b(macbook|imac|mac\s*mini|apple\s*silicon|m[1234])\b/i, category: 'laptops' },
+            { brand: 'Apple (iPhone)', test: /\b(iphone|apple)\b/i, category: 'phones' },
+            { brand: 'Samsung', test: /\b(samsung|galaxy)\b/i },
+            { brand: 'Asus', test: /\b(asus|zenbook|vivobook|rog|tuf)\b/i, category: 'laptops' },
+            { brand: 'Acer', test: /\b(acer|aspire|predator|nitro|swift)\b/i, category: 'laptops' },
+            { brand: 'Toshiba', test: /\b(toshiba|dynabook)\b/i, category: 'laptops' },
+            { brand: 'MSI', test: /\b(msi)\b/i, category: 'laptops' },
+            { brand: 'Microsoft Surface', test: /\b(surface|microsoft\s*surface)\b/i, category: 'laptops' },
+            { brand: 'Tecno', test: /\b(tecno|camon|spark|phantom)\b/i, category: 'phones' },
+            { brand: 'Infinix', test: /\b(infinix|hot|note|zero)\b/i, category: 'phones' },
+            { brand: 'Google Pixel', test: /\b(pixel|google\s*pixel)\b/i, category: 'phones' },
+            { brand: 'Xiaomi / Redmi', test: /\b(xiaomi|redmi|poco)\b/i, category: 'phones' },
+            { brand: 'Huawei', test: /\b(huawei)\b/i },
+            { brand: 'Oppo', test: /\b(oppo)\b/i, category: 'phones' },
+            { brand: 'Vivo', test: /\b(vivo)\b/i, category: 'phones' },
+            { brand: 'OnePlus', test: /\b(oneplus)\b/i, category: 'phones' },
+          ];
 
-  return (
-    <div className={`min-h-screen flex flex-col bg-slate-950 text-slate-100 font-sans selection:bg-cyan-500 selection:text-black relative overflow-x-hidden ${isLightMode ? 'theme-light' : ''}`}>
-      {/* Background Cyberpunk Grid */}
-      <div className={`absolute inset-0 bg-[linear-gradient(to_right,#1e1b4b15_1px,transparent_1px),linear-gradient(to_bottom,#1e1b4b15_1px,transparent_1px)] bg-[size:4rem_4rem] pointer-events-none ${isLightMode ? 'hidden' : ''}`} />
-      <div className="absolute top-0 left-1/4 w-96 h-96 bg-cyan-600/10 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-purple-600/10 rounded-full blur-[120px] pointer-events-none" />
+          for (const bm of brandMatches) {
+            if (bm.test.test(fullLower)) {
+              detectedBrand = bm.brand;
+              if (bm.category && !isLaptop) {
+                detectedCategory = bm.category;
+              }
+              break;
+            }
+          }
 
-      {/* Top Header Navigation */}
-      <header className="relative z-50 border-b border-cyan-500/30 bg-slate-950/80 backdrop-blur-md sticky top-0">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-2">
-          {/* Logo Brand */}
-          <div className="flex min-w-0 items-center space-x-2 sm:space-x-3 cursor-pointer" onClick={() => setActiveTab('catalog')}>
-            <img
-              src="/gkb-company-logo.png"
-              alt="GKB Technologies company logo"
-              className="h-12 w-12 shrink-0 rounded-lg object-cover shadow-[0_0_15px_rgba(6,182,212,0.2)]"
-            />
-            <div>
-              <h1 className="truncate text-sm sm:text-lg font-black tracking-wider bg-gradient-to-r from-cyan-400 via-purple-300 to-purple-500 bg-clip-text text-transparent">
-                GKB SHOPPING PORTAL
-              </h1>
-              <p className="hidden sm:block text-[10px] text-cyan-400/70 tracking-widest uppercase">Laptops · Mobile Phones · Electronic Gadgets</p>
-            </div>
-          </div>
+          // 3. Detect Price (typically near bottom or labeled with currency)
+          let detectedPrice = '';
+          let priceLineIndex = -1;
 
-          {/* Navigation Items */}
-          <nav aria-label="Main navigation" className="hidden md:flex items-center space-x-1">
-            <button
-              type="button"
-              onClick={() => setActiveTab('catalog')}
-              className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'catalog' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'text-slate-400 hover:text-cyan-300'}`}
-            >
-              Gadget Catalog
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (!user) {
-                  setLoginError('');
-                  setLoginMessage('Please sign in or create an account to view and place orders.');
-                  setLoginModalOpen(true);
-                  return;
-                }
-                setActiveTab('order');
-              }}
-              className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'order' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'text-slate-400 hover:text-cyan-300'}`}
-            >
-              Order & Track
-            </button>
-            {canManageInventory && (
-              <button
-                type="button"
-                onClick={() => setActiveTab('admin-inventory')}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-1.5 ${activeTab === 'admin-inventory' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/50 shadow-[0_0_10px_rgba(168,85,247,0.3)]' : 'text-slate-400 hover:text-purple-300'}`}
-              >
-                {isVendor ? <Store className="h-3.5 w-3.5" /> : <Layers className="h-3.5 w-3.5" />}
-                {isAdmin ? 'Manage Inventory' : 'Vendor Portal'}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setActiveTab('contact')}
-              className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'contact' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'text-slate-400 hover:text-cyan-300'}`}
-            >
-              Contact Us
-            </button>
-          </nav>
+          // Bottom-up search for standalone or formatted numbers
+          for (let i = rawLines.length - 1; i >= 0; i--) {
+            const lineClean = cleanLine(rawLines[i]);
+            const priceMatch = lineClean.match(/^(?:(?:ghs|gh₵|gh|cedis|price|¢)[:\s]*)?([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{3,6})(?:\.00|\/-)?(?:\s*(?:ghs|gh₵|gh|cedis|¢))?$/i);
+            if (priceMatch) {
+              const val = priceMatch[1].replace(/,/g, '');
+              const num = parseFloat(val);
+              if (!isNaN(num) && num >= 50 && num <= 250000) {
+                detectedPrice = val;
+                priceLineIndex = i;
+                break;
+              }
+            }
+          }
 
-          {/* Right Action Buttons */}
-          <div className="flex shrink-0 items-center space-x-2 sm:space-x-3">
-            <button
-              type="button"
-              onClick={() => setIsLightMode(!isLightMode)}
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-cyan-500/30 bg-slate-900 px-2.5 py-2 text-xs font-medium text-slate-300 transition-colors hover:border-cyan-400 hover:text-cyan-300 sm:px-3"
-            >
-              {isLightMode ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-              <span className="hidden sm:inline">{isLightMode ? 'Dark' : 'Light'}</span>
-            </button>
+          // Fallback search anywhere in text for "GHS 4490" etc.
+          if (!detectedPrice) {
+            const labeledMatch = fullLower.match(/(?:ghs|gh₵|gh|cedis|price|¢)[:\s]*([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{3,6})/i);
+            if (labeledMatch) {
+              detectedPrice = labeledMatch[1].replace(/,/g, '');
+            }
+          }
 
-            {user ? (
-              <div className="flex items-center space-x-2 sm:space-x-3 bg-slate-900 border border-purple-500/30 px-2 sm:px-3 py-1.5 rounded-lg">
-                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                {isAdmin ? (
-                  <span className="inline-flex items-center gap-1.5 text-xs font-bold font-mono tracking-wider text-amber-300">
-                    <Shield className="w-3.5 h-3.5 text-amber-400 fill-amber-400/20" />
-                    Admin
-                  </span>
-                ) : isVendor ? (
-                  <span className="inline-flex items-center gap-1.5 text-xs font-bold font-mono tracking-wider text-purple-300">
-                    <Store className="w-3.5 h-3.5 text-purple-400" />
-                    {user?.businessName || user?.firstName || 'Vendor'}
-                  </span>
-                ) : (
-                  <span className="text-xs text-purple-300 font-mono truncate max-w-[72px] sm:max-w-[120px]">{user.firstName || user.email}</span>
+          // 4. Detect RAM
+          let detectedRam = '';
+          const ramMatch = fullLower.match(/\b(4|6|8|12|16|24|32|64)\s*(?:gb|g)\s*(?:ddr[345]|ram|memory|lpddr[45])?\b/i);
+          if (ramMatch) {
+            const ramNum = ramMatch[1];
+            if (detectedCategory === 'laptops') {
+              const match = laptopRamOptions.find(o => o.startsWith(`${ramNum}GB`));
+              detectedRam = match || `${ramNum}GB`;
+            } else if (detectedCategory === 'phones') {
+              const match = phoneRamOptions.find(o => o.startsWith(`${ramNum}GB`));
+              detectedRam = match || `${ramNum}GB`;
+            }
+          }
+
+          // 5. Detect Storage
+          let detectedStorage = '';
+          const storageMatch = fullLower.match(/\b(64|128|256|512)\s*gb\b|\b([124])\s*tb\b/i);
+          if (storageMatch) {
+            const cleanStorage = storageMatch[0].toUpperCase().replace(/\s+/g, '');
+            if (detectedCategory === 'laptops') {
+              const match = laptopStorageOptions.find(o => o === cleanStorage || o.startsWith(cleanStorage));
+              detectedStorage = match || cleanStorage;
+            } else if (detectedCategory === 'phones') {
+              const match = phoneStorageOptions.find(o => o === cleanStorage || o.startsWith(cleanStorage));
+              detectedStorage = match || cleanStorage;
+            }
+          }
+
+          // 6. Detect Title / Model (First non-empty line that isn't just the price)
+          let candidateTitle = '';
+          for (let i = 0; i < rawLines.length; i++) {
+            if (i === priceLineIndex) continue;
+            const l = cleanLine(rawLines[i]);
+            if (l.length >= 3 && !/^\d+$/.test(l)) {
+              candidateTitle = l;
+              break;
+            }
+          }
+
+          const formatTitleWord = (w: string) => {
+            const wl = w.toLowerCase();
+            if (/^(i[3579]|ssd|hdd|ram|fhd|uhd|oled|ips|4k|2k|x360|m[1234]|ddr[345]|gb|tb)$/i.test(wl)) return w.toUpperCase();
+            if (/^\d+[a-z]?$/i.test(wl)) return w.toUpperCase();
+            return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+          };
+
+          let finalTitle = candidateTitle
+            .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
+            .split(/\s+/)
+            .filter(Boolean)
+            .map(formatTitleWord)
+            .join(' ');
+
+          if (!finalTitle) {
+            finalTitle = `${detectedBrand} Product`;
+          }
+
+          // 7. Compile Highlights
+          const highlightsList: string[] = [];
+          for (let i = 0; i < rawLines.length; i++) {
+            if (i === priceLineIndex) continue;
+            const cl = cleanLine(rawLines[i]);
+            if (cl === cleanLine(candidateTitle)) continue;
+            if (detectedPrice && cl === detectedPrice) continue;
+            if (cl.length > 1) {
+              highlightsList.push(cl);
+            }
+          }
+          const finalHighlights = highlightsList.join(' · ');
+
+          // Apply values to Form State
+          setInventoryCategory(detectedCategory);
+
+          const currentBrandList = detectedCategory === 'laptops'
+            ? laptopBrandOptions
+            : detectedCategory === 'phones'
+              ? phoneBrandOptions
+              : gadgetBrandOptions;
+
+          if (currentBrandList.includes(detectedBrand)) {
+            setInventoryBrandSelect(detectedBrand);
+            setInventoryCustomBrand('');
+          } else {
+            setInventoryBrandSelect('Other (Custom Brand)');
+            setInventoryCustomBrand(detectedCustomBrand || detectedBrand !== 'Other (Custom Brand)' ? detectedBrand : '');
+          }
+
+          setInventoryTitle(finalTitle);
+          if (detectedPrice) setInventoryPrice(detectedPrice);
+          if (detectedRam) setInventoryRam(detectedRam);
+          if (detectedStorage) setInventoryStorage(detectedStorage);
+          if (finalHighlights) setInventoryHighlights(finalHighlights);
+
+          const details: string[] = [];
+          details.push(`Category: ${detectedCategory.toUpperCase()}`);
+          details.push(`Brand: ${detectedBrand}`);
+          details.push(`Model: ${finalTitle}`);
+          if (detectedPrice) details.push(`Price: GHS ${Number(detectedPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}`);
+          if (detectedRam) details.push(`RAM: ${detectedRam}`);
+          if (detectedStorage) details.push(`Storage: ${detectedStorage}`);
+
+          setSmartParseDetails(details);
+          setSmartParseSuccess(`Auto-filled ${details.length} fields! Please review the form, attach a product photo, and upload.`);
+        } catch (err: unknown) {
+          console.error('Smart parsing failed:', err);
+          setSmartParseError('Could not parse text. Please check the format and try again.');
+        }
+      };
+
+      // Filter products by category, gadgetType, search, and brand
+      // Filter products by category, gadgetType, search, brand, and vendor
+      const displayItems = inventoryItems.filter(item => {
+        if (!isAdmin && !item.active) return false;
+        if (!isAdmin && !isVendor && !item.active) return false;
+        const category = item.category || parseCategory(item);
+        const matchesCategory = selectedCategory === 'all' || category === selectedCategory;
+
+        const matchesGadgetType = selectedCategory !== 'gadgets' || selectedGadgetType === 'all' || (
+          (item.gadgetType && item.gadgetType.toLowerCase().includes(selectedGadgetType.toLowerCase())) ||
+          item.highlights.toLowerCase().includes(selectedGadgetType.toLowerCase())
+        );
+
+        const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (item.vendorName && item.vendorName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+          cleanHighlights(item.highlights).toLowerCase().includes(searchQuery.toLowerCase());
+
+        const matchesBrand = selectedBrand === 'All' || item.brand.toLowerCase() === selectedBrand.toLowerCase();
+
+        const matchesVendor = selectedVendorFilter === 'all' || (
+          selectedVendorFilter === 'official'
+            ? Boolean(item.isOfficial)
+            : Boolean(item.vendorName && item.vendorName.toLowerCase() === selectedVendorFilter.toLowerCase())
+        );
+
+        return matchesCategory && matchesGadgetType && matchesSearch && matchesBrand && matchesVendor;
+      });
+
+      const uniqueBrands = ['All', ...Array.from(new Set(
+        inventoryItems
+          .filter(item => selectedCategory === 'all' || (item.category || parseCategory(item)) === selectedCategory)
+          .map(i => i.brand)
+      ))];
+
+      const availableVendors = Array.from(new Set(
+        inventoryItems.map(i => i.vendorName).filter(Boolean)
+      )) as string[];
+
+      return (
+        <div className={`min-h-screen flex flex-col bg-slate-950 text-slate-100 font-sans selection:bg-cyan-500 selection:text-black relative overflow-x-hidden ${isLightMode ? 'theme-light' : ''}`}>
+          {/* Background Cyberpunk Grid */}
+          <div className={`absolute inset-0 bg-[linear-gradient(to_right,#1e1b4b15_1px,transparent_1px),linear-gradient(to_bottom,#1e1b4b15_1px,transparent_1px)] bg-[size:4rem_4rem] pointer-events-none ${isLightMode ? 'hidden' : ''}`} />
+          <div className="absolute top-0 left-1/4 w-96 h-96 bg-cyan-600/10 rounded-full blur-[120px] pointer-events-none" />
+          <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-purple-600/10 rounded-full blur-[120px] pointer-events-none" />
+
+          {/* Top Header Navigation */}
+          <header className="relative z-50 border-b border-cyan-500/30 bg-slate-950/80 backdrop-blur-md sticky top-0">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-2">
+              {/* Logo Brand */}
+              <div className="flex min-w-0 items-center space-x-2 sm:space-x-3 cursor-pointer" onClick={() => setActiveTab('catalog')}>
+                <img
+                  src="/gkb-company-logo.png"
+                  alt="GKB Technologies company logo"
+                  className="h-12 w-12 shrink-0 rounded-lg object-cover shadow-[0_0_15px_rgba(6,182,212,0.2)]"
+                />
+                <div>
+                  <h1 className="truncate text-sm sm:text-lg font-black tracking-wider bg-gradient-to-r from-cyan-400 via-purple-300 to-purple-500 bg-clip-text text-transparent">
+                    GKB SHOPPING PORTAL
+                  </h1>
+                  <p className="hidden sm:block text-[10px] text-cyan-400/70 tracking-widest uppercase">Laptops · Mobile Phones · Electronic Gadgets</p>
+                </div>
+              </div>
+
+              {/* Navigation Items */}
+              <nav aria-label="Main navigation" className="hidden md:flex items-center space-x-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('catalog')}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'catalog' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'text-slate-400 hover:text-cyan-300'}`}
+                >
+                  Gadget Catalog
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!user) {
+                      setLoginError('');
+                      setLoginMessage('Please sign in or create an account to view and place orders.');
+                      setLoginModalOpen(true);
+                      return;
+                    }
+                    setActiveTab('order');
+                  }}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'order' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'text-slate-400 hover:text-cyan-300'}`}
+                >
+                  Order & Track
+                </button>
+                {canManageInventory && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('admin-inventory')}
+                    className={`px-3 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-1.5 ${activeTab === 'admin-inventory' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/50 shadow-[0_0_10px_rgba(168,85,247,0.3)]' : 'text-slate-400 hover:text-purple-300'}`}
+                  >
+                    {isVendor ? <Store className="h-3.5 w-3.5" /> : <Layers className="h-3.5 w-3.5" />}
+                    {isAdmin ? 'Manage Inventory' : 'Vendor Portal'}
+                  </button>
                 )}
                 <button
                   type="button"
-                  onClick={handleLogout}
-                  className="text-slate-400 hover:text-red-400 transition-colors"
-                  title="Logout"
+                  onClick={() => setActiveTab('contact')}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'contact' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'text-slate-400 hover:text-cyan-300'}`}
                 >
-                  <LogOut className="w-4 h-4" />
+                  Contact Us
                 </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setLoginModalOpen(true)}
-                className="px-3 sm:px-4 py-2 rounded-lg font-bold text-xs tracking-wider uppercase bg-gradient-to-r from-cyan-500 to-purple-600 text-black shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:shadow-[0_0_25px_rgba(168,85,247,0.6)] transition-all"
-              >
-                Sign In
-              </button>
-            )}
-          </div>
-        </div>
+              </nav>
 
-        {/* Mobile Navigation */}
-        <nav className="flex md:hidden gap-1 overflow-x-auto border-t border-slate-800/70 px-3 py-2 scrollbar-none">
-          <button
-            type="button"
-            onClick={() => setActiveTab('catalog')}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap ${activeTab === 'catalog' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/40' : 'text-slate-400'}`}
-          >
-            Catalog
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('order')}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap ${activeTab === 'order' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/40' : 'text-slate-400'}`}
-          >
-            Order & Track
-          </button>
-          {canManageInventory && (
-            <button
-              type="button"
-              onClick={() => setActiveTab('admin-inventory')}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap flex items-center gap-1 ${activeTab === 'admin-inventory' ? 'bg-purple-500/20 text-purple-300' : 'text-slate-400'}`}
-            >
-              {isVendor ? <Store className="h-3 w-3" /> : null}
-              {isAdmin ? 'Inventory' : 'Vendor Hub'}
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setActiveTab('contact')}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap ${activeTab === 'contact' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/40' : 'text-slate-400'}`}
-          >
-            Contact
-          </button>
-        </nav>
-      </header>
+              {/* Right Action Buttons */}
+              <div className="flex shrink-0 items-center space-x-2 sm:space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setIsLightMode(!isLightMode)}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-cyan-500/30 bg-slate-900 px-2.5 py-2 text-xs font-medium text-slate-300 transition-colors hover:border-cyan-400 hover:text-cyan-300 sm:px-3"
+                >
+                  {isLightMode ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+                  <span className="hidden sm:inline">{isLightMode ? 'Dark' : 'Light'}</span>
+                </button>
 
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* ================= STOREFRONT CATALOG ================= */}
-        {activeTab === 'catalog' && (
-          <div className="space-y-8 animate-fadeIn">
-            {/* Hero Banner */}
-            <section className="relative overflow-hidden rounded-3xl border border-cyan-500/30 bg-gradient-to-r from-slate-900 via-purple-950/40 to-slate-900 p-8 sm:p-12 shadow-2xl">
-              <div className="relative z-10 max-w-2xl space-y-4">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-1 text-xs font-bold font-mono tracking-wider text-cyan-300 uppercase">
-                  <Sparkles className="h-3.5 w-3.5" /> GKB Tech & Electronics Marketplace
-                </span>
-                <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-white leading-tight">
-                  Premium <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-sky-300 to-purple-400">Laptops, Phones</span> & Electronic Gadgets
-                </h2>
-                <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
-                  Verified stock with nationwide Ghana delivery. From top-tier engineering workstations and MacBooks to the latest smartphones, hard drives, and custom tech gear.
-                </p>
-                <div className="flex flex-wrap items-center gap-3 pt-2">
+                {user ? (
+                  <div className="flex items-center space-x-2 sm:space-x-3 bg-slate-900 border border-purple-500/30 px-2 sm:px-3 py-1.5 rounded-lg">
+                    <div className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                    {isAdmin ? (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold font-mono tracking-wider text-amber-300">
+                        <Shield className="w-3.5 h-3.5 text-amber-400 fill-amber-400/20" />
+                        Admin
+                      </span>
+                    ) : isVendor ? (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold font-mono tracking-wider text-purple-300">
+                        <Store className="w-3.5 h-3.5 text-purple-400" />
+                        {user?.businessName || user?.firstName || 'Vendor'}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-purple-300 font-mono truncate max-w-[72px] sm:max-w-[120px]">{user.firstName || user.email}</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="text-slate-400 hover:text-red-400 transition-colors"
+                      title="Logout"
+                    >
+                      <LogOut className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
                   <button
                     type="button"
-                    onClick={() => setActiveTab('order')}
-                    className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-600 px-5 py-3 text-sm font-bold text-black shadow-lg shadow-cyan-500/25 hover:scale-105 transition-all"
+                    onClick={() => setLoginModalOpen(true)}
+                    className="px-3 sm:px-4 py-2 rounded-lg font-bold text-xs tracking-wider uppercase bg-gradient-to-r from-cyan-500 to-purple-600 text-black shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:shadow-[0_0_25px_rgba(168,85,247,0.6)] transition-all"
                   >
-                    <ShoppingBag className="h-4 w-4" /> Place an Order
+                    Sign In
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const el = document.getElementById('catalog-grid');
-                      el?.scrollIntoView({ behavior: 'smooth' });
-                    }}
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/70 px-5 py-3 text-sm font-semibold text-slate-200 hover:border-cyan-400 hover:text-cyan-300 transition-colors"
-                  >
-                    Browse Listings
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            {/* Category Selector Tabs */}
-            <div id="catalog-grid" className="space-y-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => { setSelectedCategory('all'); setSelectedBrand('All'); }}
-                  className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
-                    selectedCategory === 'all'
-                      ? 'gkb-store-tab-active bg-cyan-500 text-slate-950 font-black shadow-md shadow-cyan-500/25 border border-cyan-400'
-                      : 'gkb-store-tab-inactive bg-slate-900/80 text-slate-300 border border-slate-800 hover:border-cyan-500/40 hover:text-cyan-300'
-                  }`}
-                >
-                  <Layers className="h-4 w-4" />
-                  <span>All Items</span>
-                  <span className="ml-1 text-[11px] font-mono opacity-80">
-                    ({inventoryItems.filter(i => isAdmin || i.active).length})
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => { setSelectedCategory('laptops'); setSelectedBrand('All'); }}
-                  className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
-                    selectedCategory === 'laptops'
-                      ? 'gkb-store-tab-active bg-cyan-500 text-slate-950 font-black shadow-md shadow-cyan-500/25 border border-cyan-400'
-                      : 'gkb-store-tab-inactive bg-slate-900/80 text-slate-300 border border-slate-800 hover:border-cyan-500/40 hover:text-cyan-300'
-                  }`}
-                >
-                  <Laptop className="h-4 w-4" />
-                  <span>Laptops & Computers</span>
-                  <span className="ml-1 text-[11px] font-mono opacity-80">
-                    ({inventoryItems.filter(i => (isAdmin || i.active) && (i.category || parseCategory(i)) === 'laptops').length})
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => { setSelectedCategory('phones'); setSelectedBrand('All'); }}
-                  className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
-                    selectedCategory === 'phones'
-                      ? 'gkb-store-tab-active bg-cyan-500 text-slate-950 font-black shadow-md shadow-cyan-500/25 border border-cyan-400'
-                      : 'gkb-store-tab-inactive bg-slate-900/80 text-slate-300 border border-slate-800 hover:border-cyan-500/40 hover:text-cyan-300'
-                  }`}
-                >
-                  <Smartphone className="h-4 w-4" />
-                  <span>Mobile Phones</span>
-                  <span className="ml-1 text-[11px] font-mono opacity-80">
-                    ({inventoryItems.filter(i => (isAdmin || i.active) && (i.category || parseCategory(i)) === 'phones').length})
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => { setSelectedCategory('gadgets'); setSelectedBrand('All'); }}
-                  className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
-                    selectedCategory === 'gadgets'
-                      ? 'gkb-store-tab-active bg-cyan-500 text-slate-950 font-black shadow-md shadow-cyan-500/25 border border-cyan-400'
-                      : 'gkb-store-tab-inactive bg-slate-900/80 text-slate-300 border border-slate-800 hover:border-cyan-500/40 hover:text-cyan-300'
-                  }`}
-                >
-                  <HardDrive className="h-4 w-4" />
-                  <span>Electronic Gadgets</span>
-                  <span className="ml-1 text-[11px] font-mono opacity-80">
-                    ({inventoryItems.filter(i => (isAdmin || i.active) && (i.category || parseCategory(i)) === 'gadgets').length})
-                  </span>
-                </button>
-              </div>
-
-              {/* Sub-Filters for Electronic Gadgets */}
-              {selectedCategory === 'gadgets' && (
-                <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-1 scrollbar-none animate-fadeIn">
-                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400 shrink-0">Sub-Filter:</span>
-                  {[
-                    { key: 'all', label: 'All Gadgets' },
-                    { key: 'hard drive', label: 'Storage & Hard Drives' },
-                    { key: 'stand', label: 'Laptop Stands' },
-                    { key: 'mouse', label: 'Mice & Keyboards' },
-                    { key: 'charger', label: 'Power & Chargers' },
-                    { key: 'audio', label: 'Audio & Wearables' },
-                    { key: 'iot', label: 'Smart IoT Kits' }
-                  ].map(sub => (
-                    <button
-                      key={sub.key}
-                      type="button"
-                      onClick={() => setSelectedGadgetType(sub.key)}
-                      className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                        selectedGadgetType === sub.key
-                          ? 'gkb-subfilter-active bg-cyan-500/20 text-cyan-300 border border-cyan-500/50'
-                          : 'gkb-subfilter-inactive bg-slate-900/60 text-slate-400 border border-slate-800 hover:text-white'
-                      }`}
-                    >
-                      {sub.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* Search and Brand Pills */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-6">
-                <div className="relative flex-1 max-w-md">
-                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder={
-                      selectedCategory === 'phones'
-                        ? 'Search iPhones, Samsung, Tecno, storage…'
-                        : selectedCategory === 'gadgets'
-                        ? 'Search hard drives, laptop stands, mice, chargers…'
-                        : 'Search laptops, specs, brand, or model…'
-                    }
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    className="w-full rounded-xl border border-slate-800 bg-slate-900/80 pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-cyan-400 focus:outline-none"
-                  />
-                </div>
-
-                {/* Brand & Vendor Filters */}
-                <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none flex-wrap sm:flex-nowrap">
-                  <Filter className="h-4 w-4 text-cyan-400 shrink-0 hidden sm:block" />
-
-                  {/* Vendor Dropdown Filter */}
-                  {availableVendors.length > 0 && (
-                    <div className="flex items-center gap-1.5 bg-slate-900 border border-purple-500/30 rounded-lg px-2.5 py-1 text-xs shrink-0">
-                      <Store className="h-3.5 w-3.5 text-purple-400 shrink-0" />
-                      <select
-                        value={selectedVendorFilter}
-                        onChange={e => setSelectedVendorFilter(e.target.value)}
-                        className="bg-transparent text-purple-200 font-semibold focus:outline-none cursor-pointer"
-                      >
-                        <option value="all" className="bg-slate-950 text-white">All Sellers ({inventoryItems.length})</option>
-                        <option value="official" className="bg-slate-950 text-white">⚡ GKB Official</option>
-                        {availableVendors.filter(v => !v.toLowerCase().includes('official')).map(v => (
-                          <option key={v} value={v} className="bg-slate-950 text-white">🏪 {v}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  {uniqueBrands.map(brand => (
-                    <button
-                      key={brand}
-                      type="button"
-                      onClick={() => setSelectedBrand(brand)}
-                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                        selectedBrand === brand
-                          ? 'gkb-subfilter-active bg-cyan-500/20 text-cyan-300 border border-cyan-500/50'
-                          : 'gkb-subfilter-inactive border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      {brand}
-                    </button>
-                  ))}
-                </div>
+                )}
               </div>
             </div>
 
-            {/* Product Cards Grid */}
-            {inventoryLoading ? (
-              <div className="py-20 text-center space-y-3">
-                <RefreshCw className="h-8 w-8 animate-spin text-cyan-400 mx-auto" />
-                <p className="text-sm text-slate-400">Loading retail inventory…</p>
-              </div>
-            ) : displayItems.length === 0 ? (
-              <div className="py-20 text-center space-y-3 border border-slate-800/80 rounded-2xl bg-slate-900/30">
-                <Tag className="h-10 w-10 text-slate-600 mx-auto" />
-                <h3 className="text-lg font-bold text-white">No products found</h3>
-                <p className="text-xs text-slate-400">Try adjusting your category, search query, or brand filter.</p>
-              </div>
-            ) : (
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {displayItems.map(item => {
-                  const imageUrl = item.image_path && relaySupabase
-                    ? relaySupabase.storage.from(inventoryImageBucket).getPublicUrl(item.image_path).data.publicUrl
-                    : null;
+            {/* Mobile Navigation */}
+            <nav className="flex md:hidden gap-1 overflow-x-auto border-t border-slate-800/70 px-3 py-2 scrollbar-none">
+              <button
+                type="button"
+                onClick={() => setActiveTab('catalog')}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap ${activeTab === 'catalog' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/40' : 'text-slate-400'}`}
+              >
+                Catalog
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('order')}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap ${activeTab === 'order' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/40' : 'text-slate-400'}`}
+              >
+                Order & Track
+              </button>
+              {canManageInventory && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('admin-inventory')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap flex items-center gap-1 ${activeTab === 'admin-inventory' ? 'bg-purple-500/20 text-purple-300' : 'text-slate-400'}`}
+                >
+                  {isVendor ? <Store className="h-3 w-3" /> : null}
+                  {isAdmin ? 'Inventory' : 'Vendor Hub'}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setActiveTab('contact')}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap ${activeTab === 'contact' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/40' : 'text-slate-400'}`}
+              >
+                Contact
+              </button>
+            </nav>
+          </header>
 
-                  const category = item.category || parseCategory(item);
-                  const isLaptop = category === 'laptops';
-                  const isPhone = category === 'phones';
-                  const isGadget = category === 'gadgets';
+          {/* Main Container */}
+          <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            {/* ================= STOREFRONT CATALOG ================= */}
+            {activeTab === 'catalog' && (
+      <div className="space-y-8 animate-fadeIn">
+        {/* Hero Banner */}
+        <section className="relative overflow-hidden rounded-3xl border border-cyan-500/30 bg-gradient-to-r from-slate-900 via-purple-950/40 to-slate-900 p-8 sm:p-12 shadow-2xl">
+          <div className="relative z-10 max-w-2xl space-y-4">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-1 text-xs font-bold font-mono tracking-wider text-cyan-300 uppercase">
+              <Sparkles className="h-3.5 w-3.5" /> GKB Tech & Electronics Marketplace
+            </span>
+            <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-white leading-tight">
+              Premium <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-sky-300 to-purple-400">Laptops, Phones</span> & Electronic Gadgets
+            </h2>
+            <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
+              Verified stock with nationwide Ghana delivery. From top-tier engineering workstations and MacBooks to the latest smartphones, hard drives, and custom tech gear.
+            </p>
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab('order')}
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-600 px-5 py-3 text-sm font-bold text-black shadow-lg shadow-cyan-500/25 hover:scale-105 transition-all"
+              >
+                <ShoppingBag className="h-4 w-4" /> Place an Order
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const el = document.getElementById('catalog-grid');
+                  el?.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/70 px-5 py-3 text-sm font-semibold text-slate-200 hover:border-cyan-400 hover:text-cyan-300 transition-colors"
+              >
+                Browse Listings
+              </button>
+            </div>
+          </div>
+        </section>
 
-                  return (
-                    <article
-                      key={item.id}
-                      className="group flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900/60 transition-all duration-300 hover:border-cyan-500/40 hover:shadow-[0_0_25px_rgba(6,182,212,0.15)]"
+        {/* Category Selector Tabs */}
+        <div id="catalog-grid" className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => { setSelectedCategory('all'); setSelectedBrand('All'); }}
+              className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${selectedCategory === 'all'
+                  ? 'gkb-store-tab-active bg-cyan-500 text-slate-950 font-black shadow-md shadow-cyan-500/25 border border-cyan-400'
+                  : 'gkb-store-tab-inactive bg-slate-900/80 text-slate-300 border border-slate-800 hover:border-cyan-500/40 hover:text-cyan-300'
+                }`}
+            >
+              <Layers className="h-4 w-4" />
+              <span>All Items</span>
+              <span className="ml-1 text-[11px] font-mono opacity-80">
+                ({inventoryItems.filter(i => isAdmin || i.active).length})
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setSelectedCategory('laptops'); setSelectedBrand('All'); }}
+              className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${selectedCategory === 'laptops'
+                  ? 'gkb-store-tab-active bg-cyan-500 text-slate-950 font-black shadow-md shadow-cyan-500/25 border border-cyan-400'
+                  : 'gkb-store-tab-inactive bg-slate-900/80 text-slate-300 border border-slate-800 hover:border-cyan-500/40 hover:text-cyan-300'
+                }`}
+            >
+              <Laptop className="h-4 w-4" />
+              <span>Laptops & Computers</span>
+              <span className="ml-1 text-[11px] font-mono opacity-80">
+                ({inventoryItems.filter(i => (isAdmin || i.active) && (i.category || parseCategory(i)) === 'laptops').length})
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setSelectedCategory('phones'); setSelectedBrand('All'); }}
+              className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${selectedCategory === 'phones'
+                  ? 'gkb-store-tab-active bg-cyan-500 text-slate-950 font-black shadow-md shadow-cyan-500/25 border border-cyan-400'
+                  : 'gkb-store-tab-inactive bg-slate-900/80 text-slate-300 border border-slate-800 hover:border-cyan-500/40 hover:text-cyan-300'
+                }`}
+            >
+              <Smartphone className="h-4 w-4" />
+              <span>Mobile Phones</span>
+              <span className="ml-1 text-[11px] font-mono opacity-80">
+                ({inventoryItems.filter(i => (isAdmin || i.active) && (i.category || parseCategory(i)) === 'phones').length})
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setSelectedCategory('gadgets'); setSelectedBrand('All'); }}
+              className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${selectedCategory === 'gadgets'
+                  ? 'gkb-store-tab-active bg-cyan-500 text-slate-950 font-black shadow-md shadow-cyan-500/25 border border-cyan-400'
+                  : 'gkb-store-tab-inactive bg-slate-900/80 text-slate-300 border border-slate-800 hover:border-cyan-500/40 hover:text-cyan-300'
+                }`}
+            >
+              <HardDrive className="h-4 w-4" />
+              <span>Electronic Gadgets</span>
+              <span className="ml-1 text-[11px] font-mono opacity-80">
+                ({inventoryItems.filter(i => (isAdmin || i.active) && (i.category || parseCategory(i)) === 'gadgets').length})
+              </span>
+            </button>
+          </div>
+
+          {/* Sub-Filters for Electronic Gadgets */}
+          {selectedCategory === 'gadgets' && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-1 scrollbar-none animate-fadeIn">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400 shrink-0">Sub-Filter:</span>
+              {[
+                { key: 'all', label: 'All Gadgets' },
+                { key: 'hard drive', label: 'Storage & Hard Drives' },
+                { key: 'stand', label: 'Laptop Stands' },
+                { key: 'mouse', label: 'Mice & Keyboards' },
+                { key: 'charger', label: 'Power & Chargers' },
+                { key: 'audio', label: 'Audio & Wearables' },
+                { key: 'iot', label: 'Smart IoT Kits' }
+              ].map(sub => (
+                <button
+                  key={sub.key}
+                  type="button"
+                  onClick={() => setSelectedGadgetType(sub.key)}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${selectedGadgetType === sub.key
+                      ? 'gkb-subfilter-active bg-cyan-500/20 text-cyan-300 border border-cyan-500/50'
+                      : 'gkb-subfilter-inactive bg-slate-900/60 text-slate-400 border border-slate-800 hover:text-white'
+                    }`}
+                >
+                  {sub.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Search and Brand Pills */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-6">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder={
+                  selectedCategory === 'phones'
+                    ? 'Search iPhones, Samsung, Tecno, storage…'
+                    : selectedCategory === 'gadgets'
+                      ? 'Search hard drives, laptop stands, mice, chargers…'
+                      : 'Search laptops, specs, brand, or model…'
+                }
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full rounded-xl border border-slate-800 bg-slate-900/80 pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-cyan-400 focus:outline-none"
+              />
+            </div>
+
+            {/* Brand Pills tailored to current category */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+              {/* Brand & Vendor Filters */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none flex-wrap sm:flex-nowrap">
+                <Filter className="h-4 w-4 text-cyan-400 shrink-0 hidden sm:block" />
+
+                {/* Vendor Dropdown Filter */}
+                {availableVendors.length > 0 && (
+                  <div className="flex items-center gap-1.5 bg-slate-900 border border-purple-500/30 rounded-lg px-2.5 py-1 text-xs shrink-0">
+                    <Store className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                    <select
+                      value={selectedVendorFilter}
+                      onChange={e => setSelectedVendorFilter(e.target.value)}
+                      className="bg-transparent text-purple-200 font-semibold focus:outline-none cursor-pointer"
                     >
-                      <div>
-                        {/* Image Preview Container */}
-                        <div className="relative aspect-[16/10] w-full overflow-hidden bg-slate-950 flex items-center justify-center border-b border-slate-800/60">
-                          {imageUrl ? (
-                            <img
-                              src={imageUrl}
-                              alt={item.title}
-                              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                            />
-                          ) : (
-                            <div className="flex flex-col items-center justify-center p-6 text-slate-600">
-                              {isLaptop ? (
-                                <Laptop className="h-14 w-14 text-cyan-500/40" />
-                              ) : isPhone ? (
-                                <Smartphone className="h-14 w-14 text-purple-500/40" />
-                              ) : (
-                                <HardDrive className="h-14 w-14 text-emerald-500/40" />
-                              )}
-                              <span className="mt-2 text-xs font-mono uppercase tracking-wider text-slate-500">
-                                {item.brand} · {isPhone ? 'Mobile Handset' : isGadget ? 'Electronic Gadget' : 'Laptop Workstation'}
-                              </span>
-                            </div>
-                          )}
+                      <option value="all" className="bg-slate-950 text-white">All Sellers ({inventoryItems.length})</option>
+                      <option value="official" className="bg-slate-950 text-white">⚡ GKB Official</option>
+                      {availableVendors.filter(v => !v.toLowerCase().includes('official')).map(v => (
+                        <option key={v} value={v} className="bg-slate-950 text-white">🏪 {v}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
-                          {/* Category & Brand Badges */}
-                          <div className="absolute top-3 left-3 flex items-center gap-1.5">
-                            <span className="rounded-full bg-slate-950/85 backdrop-blur-md border border-cyan-500/30 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-cyan-300">
-                              {item.brand}
+                {uniqueBrands.map(brand => (
+                  <button
+                    key={brand}
+                    type="button"
+                    onClick={() => setSelectedBrand(brand)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${selectedBrand === brand
+                        ? 'gkb-subfilter-active bg-cyan-500/20 text-cyan-300 border border-cyan-500/50'
+                        : 'gkb-subfilter-inactive border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-white'
+                      }`}
+                  >
+                    {brand}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Product Cards Grid */}
+          {inventoryLoading ? (
+            <div className="py-20 text-center space-y-3">
+              <RefreshCw className="h-8 w-8 animate-spin text-cyan-400 mx-auto" />
+              <p className="text-sm text-slate-400">Loading retail inventory…</p>
+            </div>
+          ) : displayItems.length === 0 ? (
+            <div className="py-20 text-center space-y-3 border border-slate-800/80 rounded-2xl bg-slate-900/30">
+              <Tag className="h-10 w-10 text-slate-600 mx-auto" />
+              <h3 className="text-lg font-bold text-white">No products found</h3>
+              <p className="text-xs text-slate-400">Try adjusting your category, search query, or brand filter.</p>
+            </div>
+          ) : (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {displayItems.map(item => {
+                const imageUrl = item.image_path && relaySupabase
+                  ? relaySupabase.storage.from(inventoryImageBucket).getPublicUrl(item.image_path).data.publicUrl
+                  : null;
+
+                const category = item.category || parseCategory(item);
+                const isLaptop = category === 'laptops';
+                const isPhone = category === 'phones';
+                const isGadget = category === 'gadgets';
+
+                return (
+                  <article
+                    key={item.id}
+                    className="group flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900/60 transition-all duration-300 hover:border-cyan-500/40 hover:shadow-[0_0_25px_rgba(6,182,212,0.15)]"
+                  >
+                    <div>
+                      {/* Image Preview Container */}
+                      <div className="relative aspect-[16/10] w-full overflow-hidden bg-slate-950 flex items-center justify-center border-b border-slate-800/60">
+                        {imageUrl ? (
+                          <img
+                            src={imageUrl}
+                            alt={item.title}
+                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center p-6 text-slate-600">
+                            {isLaptop ? (
+                              <Laptop className="h-14 w-14 text-cyan-500/40" />
+                            ) : isPhone ? (
+                              <Smartphone className="h-14 w-14 text-purple-500/40" />
+                            ) : (
+                              <HardDrive className="h-14 w-14 text-emerald-500/40" />
+                            )}
+                            <span className="mt-2 text-xs font-mono uppercase tracking-wider text-slate-500">
+                              {item.brand} · {isPhone ? 'Mobile Handset' : isGadget ? 'Electronic Gadget' : 'Laptop Workstation'}
                             </span>
-                            <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wide border ${
-                              isPhone
-                                ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
-                                : isGadget
+                          </div>
+                        )}
+
+                        {/* Category & Brand Badges */}
+                        <div className="absolute top-3 left-3 flex items-center gap-1.5">
+                          <span className="rounded-full bg-slate-950/85 backdrop-blur-md border border-cyan-500/30 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-cyan-300">
+                            {item.brand}
+                          </span>
+                          <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wide border ${isPhone
+                              ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                              : isGadget
                                 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                                 : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
                             }`}>
-                              {isPhone ? 'Phone' : isGadget ? 'Gadget' : 'Laptop'}
-                            </span>
-                          </div>
+                            {isPhone ? 'Phone' : isGadget ? 'Gadget' : 'Laptop'}
+                          </span>
+                        </div>
 
-                          {/* Vendor / Official Badge on Top-Right */}
-                          <div className="absolute top-3 right-3 flex items-center">
+                        {/* Vendor / Official Badge on Top-Right */}
+                        <div className="absolute top-3 right-3 flex items-center">
+                          {item.isOfficial ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-slate-950/85 backdrop-blur-md border border-cyan-500/40 px-2.5 py-1 text-[10px] font-bold text-cyan-300 shadow-sm">
+                              <BadgeCheck className="h-3 w-3 text-cyan-400" />
+                              <span>GKB Official</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-slate-950/85 backdrop-blur-md border border-amber-500/40 px-2.5 py-1 text-[10px] font-bold text-amber-300 shadow-sm">
+                              <Store className="h-3 w-3 text-amber-400" />
+                              <span className="max-w-[110px] truncate">{item.vendorName || 'Partner Vendor'}</span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Details */}
+                      <div className="p-5 space-y-3">
+                        <div>
+                          <h3 className="text-lg font-bold text-white group-hover:text-cyan-300 transition-colors">
+                            {item.title}
+                          </h3>
+                          {/* Seller / Vendor Attribution Tag */}
+                          <div className="mt-1 flex items-center gap-1 text-[11px] text-slate-400">
+                            <span className="text-slate-500">Sold by:</span>
                             {item.isOfficial ? (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-slate-950/85 backdrop-blur-md border border-cyan-500/40 px-2.5 py-1 text-[10px] font-bold text-cyan-300 shadow-sm">
-                                <BadgeCheck className="h-3 w-3 text-cyan-400" />
-                                <span>GKB Official</span>
+                              <span className="font-semibold text-cyan-400 flex items-center gap-1">
+                                <Zap className="h-3 w-3" /> GKB Official Store
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-slate-950/85 backdrop-blur-md border border-amber-500/40 px-2.5 py-1 text-[10px] font-bold text-amber-300 shadow-sm">
-                                <Store className="h-3 w-3 text-amber-400" />
-                                <span className="max-w-[110px] truncate">{item.vendorName || 'Partner Vendor'}</span>
+                              <span className="font-semibold text-amber-300 flex items-center gap-1">
+                                <Store className="h-3 w-3" /> {item.vendorName || 'Authorized Vendor'}
                               </span>
                             )}
                           </div>
                         </div>
 
-                        {/* Details */}
-                        <div className="p-5 space-y-3">
-                          <div>
-                            <h3 className="text-lg font-bold text-white group-hover:text-cyan-300 transition-colors">
-                              {item.title}
-                            </h3>
-                            {/* Seller / Vendor Attribution Tag */}
-                            <div className="mt-1 flex items-center gap-1 text-[11px] text-slate-400">
-                              <span className="text-slate-500">Sold by:</span>
-                              {item.isOfficial ? (
-                                <span className="font-semibold text-cyan-400 flex items-center gap-1">
-                                  <Zap className="h-3 w-3" /> GKB Official Store
-                                </span>
-                              ) : (
-                                <span className="font-semibold text-amber-300 flex items-center gap-1">
-                                  <Store className="h-3 w-3" /> {item.vendorName || 'Authorized Vendor'}
-                                </span>
-                              )}
-                            </div>
-                          </div>
+                        {/* Spec Badges adapted to category */}
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          {isLaptop && (
+                            <>
+                              <span className="rounded-md border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 font-mono text-purple-300">
+                                {item.ram} RAM
+                              </span>
+                              <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 font-mono text-cyan-300">
+                                {item.storage}
+                              </span>
+                              <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-300">
+                                Verified Stock
+                              </span>
+                            </>
+                          )}
 
-                          {/* Spec Badges adapted to category */}
-                          <div className="flex flex-wrap gap-2 text-xs">
-                            {isLaptop && (
-                              <>
-                                <span className="rounded-md border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 font-mono text-purple-300">
-                                  {item.ram} RAM
-                                </span>
+                          {isPhone && (
+                            <>
+                              <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 font-mono text-cyan-300">
+                                {item.storage} Space
+                              </span>
+                              <span className="rounded-md border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 font-mono text-purple-300">
+                                {item.ram} RAM
+                              </span>
+                              <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-300">
+                                Smartphone Stock
+                              </span>
+                            </>
+                          )}
+
+                          {isGadget && (
+                            <>
+                              {item.storage && item.storage !== 'None' && item.storage !== 'None / N/A' && item.storage !== 'N/A' && (
                                 <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 font-mono text-cyan-300">
                                   {item.storage}
                                 </span>
-                                <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-300">
-                                  Verified Stock
-                                </span>
-                              </>
-                            )}
-
-                            {isPhone && (
-                              <>
-                                <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 font-mono text-cyan-300">
-                                  {item.storage} Space
-                                </span>
-                                <span className="rounded-md border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 font-mono text-purple-300">
-                                  {item.ram} RAM
-                                </span>
-                                <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-300">
-                                  Smartphone Stock
-                                </span>
-                              </>
-                            )}
-
-                            {isGadget && (
-                              <>
-                                {item.storage && item.storage !== 'None' && item.storage !== 'None / N/A' && item.storage !== 'N/A' && (
-                                  <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 font-mono text-cyan-300">
-                                    {item.storage}
-                                  </span>
-                                )}
-                                <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-300">
-                                  {item.gadgetType || 'Electronic Gadget'}
-                                </span>
-                                <span className="rounded-md border border-slate-700 bg-slate-800/80 px-2 py-0.5 text-slate-300">
-                                  Genuine Hardware
-                                </span>
-                              </>
-                            )}
-                          </div>
-
-                          {/* Highlights */}
-                          <InventoryHighlights text={item.highlights} />
-                        </div>
-                      </div>
-
-                      {/* Footer Actions */}
-                      <div className="border-t border-slate-800/80 p-5 pt-4 flex items-center justify-between gap-2">
-                        <div>
-                          <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Cash / MoMo Price</p>
-                          {isItemOwner(item) && editingPriceItemId === item.id ? (
-                            <div className="mt-1 flex items-center gap-1.5 animate-fadeIn">
-                              <span className="text-xs font-mono font-bold text-amber-300">GHS</span>
-                              <input
-                                type="number"
-                                step="0.01"
-                                min="1"
-                                value={editPriceValue}
-                                onChange={e => setEditPriceValue(e.target.value)}
-                                onKeyDown={e => {
-                                  if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    void handleSavePrice(item);
-                                  } else if (e.key === 'Escape') {
-                                    handleCancelEditPrice();
-                                  }
-                                }}
-                                className="w-24 rounded border border-cyan-400 bg-slate-900 px-2 py-1 text-xs font-bold text-white focus:outline-none"
-                                autoFocus
-                              />
-                              <button
-                                type="button"
-                                disabled={priceSavingId === item.id}
-                                onClick={() => void handleSavePrice(item)}
-                                className="p-1 rounded bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition-colors disabled:opacity-50 cursor-pointer"
-                                title="Save new price"
-                              >
-                                {priceSavingId === item.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-                              </button>
-                              <button
-                                type="button"
-                                disabled={priceSavingId === item.id}
-                                onClick={handleCancelEditPrice}
-                                className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
-                                title="Cancel"
-                              >
-                                <X className="h-3 w-3" />
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <p className="text-xl font-black text-yellow-300">
-                                GHS {item.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                              </p>
-                              {isItemOwner(item) && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleStartEditPrice(item)}
-                                  className="p-1 rounded-md text-slate-400 hover:text-cyan-300 hover:bg-slate-800/60 transition-colors cursor-pointer"
-                                  title="Edit price (Owner/Admin)"
-                                >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </button>
                               )}
-                            </div>
+                              <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-300">
+                                {item.gadgetType || 'Electronic Gadget'}
+                              </span>
+                              <span className="rounded-md border border-slate-700 bg-slate-800/80 px-2 py-0.5 text-slate-300">
+                                Genuine Hardware
+                              </span>
+                            </>
                           )}
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => handleOrderProduct(item)}
-                          className="gkb-order-btn inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-600 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-black shadow-md shadow-cyan-500/20 hover:scale-105 transition-all cursor-pointer"
-                        >
-                          Order Now
-                          <ArrowRight className="h-3.5 w-3.5" />
-                        </button>
+
+                        {/* Highlights */}
+                        <InventoryHighlights text={item.highlights} />
                       </div>
-                    </article>
-                  );
-                })}
+                    </div>
+
+                    {/* Footer Actions */}
+                    <div className="border-t border-slate-800/80 p-5 pt-4 flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Cash / MoMo Price</p>
+                        {isItemOwner(item) && editingPriceItemId === item.id ? (
+                          <div className="mt-1 flex items-center gap-1.5 animate-fadeIn">
+                            <span className="text-xs font-mono font-bold text-amber-300">GHS</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="1"
+                              value={editPriceValue}
+                              onChange={e => setEditPriceValue(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  void handleSavePrice(item);
+                                } else if (e.key === 'Escape') {
+                                  handleCancelEditPrice();
+                                }
+                              }}
+                              className="w-24 rounded border border-cyan-400 bg-slate-900 px-2 py-1 text-xs font-bold text-white focus:outline-none"
+                              autoFocus
+                            />
+                            <button
+                              type="button"
+                              disabled={priceSavingId === item.id}
+                              onClick={() => void handleSavePrice(item)}
+                              className="p-1 rounded bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition-colors disabled:opacity-50 cursor-pointer"
+                              title="Save new price"
+                            >
+                              {priceSavingId === item.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={priceSavingId === item.id}
+                              onClick={handleCancelEditPrice}
+                              className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                              title="Cancel"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <p className="text-xl font-black text-yellow-300">
+                              GHS {item.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </p>
+                            {isItemOwner(item) && (
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditPrice(item)}
+                                className="p-1 rounded-md text-slate-400 hover:text-cyan-300 hover:bg-slate-800/60 transition-colors cursor-pointer"
+                                title="Edit price (Owner/Admin)"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleOrderProduct(item)}
+                        className="gkb-order-btn inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-600 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-black shadow-md shadow-cyan-500/20 hover:scale-105 transition-all cursor-pointer"
+                      >
+                        Order Now
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
               </div>
             )}
           </div>
-        )}
+        </div>
+      )}
 
         {/* ================= ORDER & TRACK VIEW ================= */}
         {activeTab === 'order' && (
@@ -1821,7 +1881,7 @@ ALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_i
                   </p>
                 </div>
               )}
-              
+
               {/* ================= SMART WHATSAPP SPEC ANALYZER ================= */}
               <div className="mt-6 rounded-2xl border border-cyan-500/40 bg-gradient-to-br from-slate-900/95 via-cyan-950/20 to-slate-900/95 p-5 sm:p-6 shadow-xl shadow-cyan-950/30">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-800/80">
@@ -2024,11 +2084,10 @@ WiFi
                     <button
                       type="button"
                       onClick={() => handleAdminCategoryChange('laptops')}
-                      className={`flex items-center justify-center gap-2.5 p-3 rounded-xl border text-xs sm:text-sm font-bold transition-all cursor-pointer ${
-                        inventoryCategory === 'laptops'
+                      className={`flex items-center justify-center gap-2.5 p-3 rounded-xl border text-xs sm:text-sm font-bold transition-all cursor-pointer ${inventoryCategory === 'laptops'
                           ? 'gkb-cat-tab-active bg-cyan-500/20 text-cyan-300 border-cyan-400 shadow-sm shadow-cyan-500/20 ring-1 ring-cyan-400/40'
                           : 'gkb-cat-tab-inactive bg-slate-950/60 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700'
-                      }`}
+                        }`}
                     >
                       <Laptop className="h-4 w-4" />
                       Laptops & Computers
@@ -2037,11 +2096,10 @@ WiFi
                     <button
                       type="button"
                       onClick={() => handleAdminCategoryChange('phones')}
-                      className={`flex items-center justify-center gap-2.5 p-3 rounded-xl border text-xs sm:text-sm font-bold transition-all cursor-pointer ${
-                        inventoryCategory === 'phones'
+                      className={`flex items-center justify-center gap-2.5 p-3 rounded-xl border text-xs sm:text-sm font-bold transition-all cursor-pointer ${inventoryCategory === 'phones'
                           ? 'gkb-cat-tab-active bg-cyan-500/20 text-cyan-300 border-cyan-400 shadow-sm shadow-cyan-500/20 ring-1 ring-cyan-400/40'
                           : 'gkb-cat-tab-inactive bg-slate-950/60 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700'
-                      }`}
+                        }`}
                     >
                       <Smartphone className="h-4 w-4" />
                       Mobile Phones
@@ -2050,11 +2108,10 @@ WiFi
                     <button
                       type="button"
                       onClick={() => handleAdminCategoryChange('gadgets')}
-                      className={`flex items-center justify-center gap-2.5 p-3 rounded-xl border text-xs sm:text-sm font-bold transition-all cursor-pointer ${
-                        inventoryCategory === 'gadgets'
+                      className={`flex items-center justify-center gap-2.5 p-3 rounded-xl border text-xs sm:text-sm font-bold transition-all cursor-pointer ${inventoryCategory === 'gadgets'
                           ? 'gkb-cat-tab-active bg-cyan-500/20 text-cyan-300 border-cyan-400 shadow-sm shadow-cyan-500/20 ring-1 ring-cyan-400/40'
                           : 'gkb-cat-tab-inactive bg-slate-950/60 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700'
-                      }`}
+                        }`}
                     >
                       <HardDrive className="h-4 w-4" />
                       Electronic Gadgets
@@ -2073,8 +2130,8 @@ WiFi
                     {(inventoryCategory === 'laptops'
                       ? laptopBrandOptions
                       : inventoryCategory === 'phones'
-                      ? phoneBrandOptions
-                      : gadgetBrandOptions
+                        ? phoneBrandOptions
+                        : gadgetBrandOptions
                     ).map(opt => (
                       <option key={opt} value={opt}>{opt}</option>
                     ))}
@@ -2126,8 +2183,8 @@ WiFi
                       inventoryCategory === 'laptops'
                         ? "e.g., HP EliteBook 840 G7 · 14.0' FHD Core i7"
                         : inventoryCategory === 'phones'
-                        ? "e.g., iPhone 13 Pro Max · 128GB Sierra Blue or Samsung S22 Ultra"
-                        : "e.g., Seagate 2TB USB 3.0 External Hard Drive or Aluminum Foldable Stand"
+                          ? "e.g., iPhone 13 Pro Max · 128GB Sierra Blue or Samsung S22 Ultra"
+                          : "e.g., Seagate 2TB USB 3.0 External Hard Drive or Aluminum Foldable Stand"
                     }
                     className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-cyan-400 focus:outline-none transition-colors"
                   />
@@ -2236,8 +2293,8 @@ WiFi
                       inventoryCategory === 'laptops'
                         ? "Processor, display size, battery life, condition, keyboard light, ports..."
                         : inventoryCategory === 'phones'
-                        ? "Battery health, camera specs, dual SIM status, condition (in box, pristine), network (5G)..."
-                        : "Connectivity, material, dimensions, compatibility, power rating, included accessories..."
+                          ? "Battery health, camera specs, dual SIM status, condition (in box, pristine), network (5G)..."
+                          : "Connectivity, material, dimensions, compatibility, power rating, included accessories..."
                     }
                     className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-cyan-400 focus:outline-none transition-colors"
                   />
@@ -2280,397 +2337,399 @@ WiFi
                       : 'Master inventory control: adjust prices, assign vendors, or toggle active status.'}
                   </p>
                 </div>
-                {isAdmin && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-400 font-medium">Filter by Seller:</span>
-                    <select
-                      value={selectedVendorFilter}
-                      onChange={e => setSelectedVendorFilter(e.target.value)}
-                      className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold text-white focus:border-cyan-400 focus:outline-none"
-                    >
-                      <option value="all">All Sellers ({availableVendors.length})</option>
-                      {availableVendors.map(v => (
-                        <option key={v} value={v}>
-                          {v}
-                        </option>
-                      ))}
-                    </select>
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-xs text-slate-400 font-mono">
+                    {inventoryItems.filter(i => (i.category || parseCategory(i)) === 'laptops').length} Laptops · {inventoryItems.filter(i => (i.category || parseCategory(i)) === 'phones').length} Phones · {inventoryItems.filter(i => (i.category || parseCategory(i)) === 'gadgets').length} Gadgets
+                  </span>
+                  {isAdmin && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400 font-medium">Filter by Seller:</span>
+                      <select
+                        value={selectedVendorFilter}
+                        onChange={e => setSelectedVendorFilter(e.target.value)}
+                        className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold text-white focus:border-cyan-400 focus:outline-none"
+                      >
+                        <option value="all">All Sellers ({availableVendors.length})</option>
+                        {availableVendors.map(v => (
+                          <option key={v} value={v}>
+                            {v}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+                {priceEditSuccess && (
+                  <div className="p-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 text-xs font-semibold flex items-center gap-2 animate-fadeIn">
+                    <CheckCircle className="h-4 w-4 text-emerald-400 shrink-0" />
+                    {priceEditSuccess}
+                  </div>
+                )}
+
+                {priceEditError && (
+                  <div className="p-3 rounded-xl border border-red-500/40 bg-red-500/10 text-red-300 text-xs font-semibold flex items-center gap-2 animate-fadeIn">
+                    <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
+                    {priceEditError}
+                  </div>
+                )}
+
+                <div className="divide-y divide-slate-800">
+                  {inventoryItems
+                    .filter(item => {
+                      if (isVendor) return isItemOwner(item);
+                      if (isAdmin && selectedVendorFilter !== 'all') {
+                        return (item.vendorName || 'GKB Official Store') === selectedVendorFilter;
+                      }
+                      return true;
+                    })
+                    .map(item => {
+                      const category = item.category || parseCategory(item);
+                      const isEditingThisPrice = editingPriceItemId === item.id;
+                      const canEdit = isItemOwner(item);
+                      return (
+                                  <div key={item.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="font-bold text-white">{item.title}</span>
+                                        <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${category === 'phones'
+                                            ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                                            : category === 'gadgets'
+                                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                              : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                                          }`}>
+                                          {category === 'phones' ? 'PHONE' : category === 'gadgets' ? 'GADGET' : 'LAPTOP'}
+                                        </span>
+                                        {/* Vendor badge in row */}
+                                        {item.isOfficial ? (
+                                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 flex items-center gap-1">
+                                            <BadgeCheck className="h-3 w-3 text-cyan-400" /> GKB Official
+                                          </span>
+                                        ) : (
+                                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                                            <Store className="h-3 w-3 text-amber-400" /> {item.vendorName || 'Vendor'}
+                                          </span>
+                                        )}
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${item.active ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'}`}>
+                                          {item.active ? 'ACTIVE' : 'ARCHIVED'}
+                                        </span>
+                                      </div>
+                                      <p className="text-xs text-slate-400 mt-1">
+                                        {item.brand} · <span className="font-bold text-amber-300 font-mono">GHS {item.price.toFixed(2)}</span>
+                                        {category !== 'gadgets' && ` · ${item.ram} RAM · ${item.storage}`}
+                                        {category === 'gadgets' && item.storage && item.storage !== 'None' && item.storage !== 'N/A' && ` · Capacity: ${item.storage}`}
+                                      </p>
+
+                                      {/* Inline Price Editor when active */}
+                                      {isEditingThisPrice && (
+                                        <div className="mt-3 flex items-center gap-2 flex-wrap bg-slate-950 p-3 rounded-xl border border-cyan-500/40 animate-fadeIn">
+                                          <span className="text-xs font-mono font-bold text-cyan-300 flex items-center gap-1">
+                                            <DollarSign className="h-3.5 w-3.5" /> Adjust Price (GHS):
+                                          </span>
+                                          <div className="relative">
+                                            <input
+                                              type="number"
+                                              step="0.01"
+                                              min="1"
+                                              value={editPriceValue}
+                                              onChange={e => setEditPriceValue(e.target.value)}
+                                              onKeyDown={e => {
+                                                if (e.key === 'Enter') {
+                                                  e.preventDefault();
+                                                  void handleSavePrice(item);
+                                                } else if (e.key === 'Escape') {
+                                                  handleCancelEditPrice();
+                                                }
+                                              }}
+                                              placeholder="e.g. 4500.00"
+                                              className="w-36 rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-bold text-white focus:border-cyan-400 focus:outline-none"
+                                              autoFocus
+                                            />
+                                          </div>
+                                          <button
+                                            type="button"
+                                            disabled={priceSavingId === item.id}
+                                            onClick={() => void handleSavePrice(item)}
+                                            className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1.5 cursor-pointer shadow-sm shadow-cyan-500/20"
+                                          >
+                                            {priceSavingId === item.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                                            {priceSavingId === item.id ? 'Saving…' : 'Save Price'}
+                                          </button>
+                                          <button
+                                            type="button"
+                                            disabled={priceSavingId === item.id}
+                                            onClick={handleCancelEditPrice}
+                                            className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-all cursor-pointer"
+                                          >
+                                            Cancel
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      {canEdit && !isEditingThisPrice && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleStartEditPrice(item)}
+                                          className="text-xs px-3 py-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
+                                          title="Edit price of this product"
+                                        >
+                                          <Pencil className="h-3.5 w-3.5" />
+                                          Edit Price
+                                        </button>
+                                      )}
+                                      {canEdit && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleToggleInventoryItem(item)}
+                                          className={`text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors cursor-pointer ${
+                                            item.active
+                                              ? 'border-amber-500/40 text-amber-300 hover:bg-amber-500/10'
+                                              : 'border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10'
+                                          }`}
+                                        >
+                                          {item.active ? 'Archive Listing' : 'Restore Listing'}
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        </section>
+                      </div>
+                    )}
+
+        {/* ================= CONTACT VIEW ================= */ }
+        { activeTab === 'contact' && (
+                      <div className="max-w-3xl mx-auto space-y-8 animate-fadeIn">
+                        <div className="rounded-3xl border border-cyan-500/30 bg-slate-900/80 p-8 shadow-xl space-y-6">
+                          <div>
+                            <span className="text-xs font-bold uppercase tracking-widest text-cyan-400">Customer Support & Orders</span>
+                            <h2 className="text-2xl sm:text-3xl font-black text-white mt-1">Contact GKB Technologies</h2>
+                            <p className="text-sm text-slate-300 mt-2">Have a question about a laptop, mobile phone, or electronic gadget? Need a custom spec or want to verify an order? Reach out to us directly.</p>
+                          </div>
+
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4 space-y-1">
+                              <div className="flex items-center gap-2 text-cyan-400 text-xs font-bold uppercase">
+                                <Phone className="h-4 w-4" /> Phone & WhatsApp
+                              </div>
+                              <p className="text-lg font-black text-white">0552117787</p>
+                              <p className="text-xs text-slate-400">Available Monday – Saturday, 8AM to 8PM</p>
+                            </div>
+                            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4 space-y-1">
+                              <div className="flex items-center gap-2 text-purple-400 text-xs font-bold uppercase">
+                                <Mail className="h-4 w-4" /> Direct Email
+                              </div>
+                              <p className="text-lg font-black text-white">gkbtechnologies@gmail.com</p>
+                              <p className="text-xs text-slate-400">Response within 2-4 hours</p>
+                            </div>
+                            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4 space-y-1">
+                              <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold uppercase">
+                                <Globe className="h-4 w-4" /> Nationwide Delivery
+                              </div>
+                              <p className="text-lg font-black text-white">Accra, Kumasi & All Regions</p>
+                              <p className="text-xs text-slate-400">Fast delivery with payment verification</p>
+                            </div>
+                            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4 space-y-1">
+                              <div className="flex items-center gap-2 text-yellow-400 text-xs font-bold uppercase">
+                                <Shield className="h-4 w-4" /> GKB Hardware Guarantee
+                              </div>
+                              <p className="text-lg font-black text-white">Tested & Verified Hardware</p>
+                              <p className="text-xs text-slate-400">Every device undergoes multi-point inspection</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                </main>
+
+                {/* Footer */}
+                <footer className="border-t border-slate-800/80 bg-slate-950/80 py-8 text-center text-xs text-slate-500">
+                  <p>© {new Date().getFullYear()} GKB Technologies. High-Performance Laptops, Mobile Devices & Electronics.</p>
+                  <p className="mt-1 font-mono text-[10px] text-cyan-400/50">Engineered with Precision · Accra, Ghana</p>
+                </footer>
+
+                {/* Login / Signup Modal */}
+                {loginModalOpen && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
+                    <div className="relative w-full max-w-md rounded-2xl border border-cyan-500/40 bg-slate-950 p-6 text-white shadow-2xl space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <h3 className="text-lg font-bold">{creatingAccount ? 'Create GKB Account' : 'Sign in to GKB'}</h3>
+                        <button
+                          type="button"
+                          onClick={() => setLoginModalOpen(false)}
+                          className="text-slate-400 hover:text-white"
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      {loginError && (
+                        <p className="text-xs text-red-300 bg-red-500/10 p-2.5 rounded-lg border border-red-500/30">{loginError}</p>
+                      )}
+                      {loginMessage && (
+                        <p className="text-xs text-emerald-300 bg-emerald-500/10 p-2.5 rounded-lg border border-emerald-500/30">{loginMessage}</p>
+                      )}
+
+                      <form onSubmit={handleLoginSubmit} className="space-y-3 text-xs">
+                        {creatingAccount && (
+                          <div className="space-y-3">
+                            <div>
+                              <label className="text-slate-300 block mb-1 font-semibold">I want to register as:</label>
+                              <div className="grid grid-cols-2 gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setSignupAccountType('client')}
+                                  className={`flex items-center justify-center gap-2 p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${signupAccountType === 'client'
+                                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400 shadow-sm shadow-cyan-500/20 ring-1 ring-cyan-400/40'
+                                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                                    }`}
+                                >
+                                  <User className="h-3.5 w-3.5" />
+                                  Buyer / Client
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setSignupAccountType('vendor')}
+                                  className={`flex items-center justify-center gap-2 p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${signupAccountType === 'vendor'
+                                      ? 'bg-amber-500/20 text-amber-300 border-amber-400 shadow-sm shadow-amber-500/20 ring-1 ring-amber-400/40'
+                                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                                    }`}
+                                >
+                                  <Store className="h-3.5 w-3.5 text-amber-400" />
+                                  Vendor / Seller
+                                </button>
+                              </div>
+                            </div>
+
+                            {signupAccountType === 'vendor' && (
+                              <label className="text-slate-300 block animate-fadeIn">
+                                <span className="text-amber-300 font-bold flex items-center gap-1.5">
+                                  <Store className="h-3.5 w-3.5 text-amber-400" /> Store / Business Name *
+                                </span>
+                                <input
+                                  type="text"
+                                  required
+                                  value={signupBusinessName}
+                                  onChange={e => setSignupBusinessName(e.target.value)}
+                                  placeholder="e.g. Apex Laptops Hub, Swift Computers..."
+                                  className="mt-1 w-full rounded-lg border border-amber-500/50 bg-slate-900 px-3 py-2 text-white focus:border-amber-400 focus:outline-none"
+                                />
+                                <span className="text-[10px] text-slate-400 mt-1 block">
+                                  Your store name will be displayed on all laptops and products you publish to the marketplace.
+                                </span>
+                              </label>
+                            )}
+                          </div>
+                        )}
+
+                        {creatingAccount && (
+                          <div className="grid grid-cols-2 gap-2">
+                            <label className="text-slate-300">
+                              First Name
+                              <input
+                                type="text"
+                                required
+                                value={signupFirstName}
+                                onChange={e => setSignupFirstName(e.target.value)}
+                                placeholder="e.g. Kwame"
+                                className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-white focus:border-cyan-400 focus:outline-none"
+                              />
+                            </label>
+                            <label className="text-slate-300">
+                              Last Name
+                              <input
+                                type="text"
+                                required
+                                value={signupLastName}
+                                onChange={e => setSignupLastName(e.target.value)}
+                                placeholder="e.g. Mensah"
+                                className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-white focus:border-cyan-400 focus:outline-none"
+                              />
+                            </label>
+                          </div>
+                        )}
+
+                        <label className="text-slate-300 block">
+                          Email Address or Phone Number
+                          <input
+                            type="text"
+                            required
+                            value={loginEmail}
+                            onChange={e => setLoginEmail(e.target.value)}
+                            placeholder="name@gmail.com or 0552117787"
+                            className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-white focus:border-cyan-400 focus:outline-none"
+                          />
+                        </label>
+
+                        {creatingAccount && (
+                          <div className="grid grid-cols-2 gap-2">
+                            <label className="text-slate-300">
+                              Phone Number
+                              <input
+                                type="tel"
+                                required
+                                value={signupPhone}
+                                onChange={e => setSignupPhone(e.target.value)}
+                                placeholder="0552117787"
+                                className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-white focus:border-cyan-400 focus:outline-none"
+                              />
+                            </label>
+                            <label className="text-slate-300">
+                              Delivery City / Town
+                              <input
+                                type="text"
+                                required
+                                value={signupLocation}
+                                onChange={e => setSignupLocation(e.target.value)}
+                                placeholder="Accra, Kumasi..."
+                                className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-white focus:border-cyan-400 focus:outline-none"
+                              />
+                            </label>
+                          </div>
+                        )}
+
+                        <label className="text-slate-300 block">
+                          Password
+                          <input
+                            type="password"
+                            required
+                            value={loginPassword}
+                            onChange={e => setLoginPassword(e.target.value)}
+                            placeholder="••••••••"
+                            className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-white focus:border-cyan-400 focus:outline-none"
+                          />
+                        </label>
+
+                        <button
+                          type="submit"
+                          disabled={loginBusy}
+                          className="w-full mt-2 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-600 py-2.5 font-bold text-xs uppercase tracking-wider text-black shadow-lg shadow-cyan-500/20 hover:scale-[1.02] transition-all disabled:opacity-50 cursor-pointer"
+                        >
+                          {loginBusy ? 'Authenticating…' : (creatingAccount ? 'Complete Registration' : 'Sign In')}
+                        </button>
+                      </form>
+
+                      <div className="text-center pt-2 border-t border-slate-800/80">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCreatingAccount(v => !v);
+                            setLoginError('');
+                            setLoginMessage('');
+                          }}
+                          className="text-xs text-cyan-400 hover:underline"
+                        >
+                          {creatingAccount ? 'Already registered? Sign in' : "Don't have an account? Sign up in 10 seconds"}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
-
-              {priceEditSuccess && (
-                <div className="p-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 text-xs font-semibold flex items-center gap-2 animate-fadeIn">
-                  <CheckCircle className="h-4 w-4 text-emerald-400 shrink-0" />
-                  {priceEditSuccess}
-                </div>
-              )}
-
-              {priceEditError && (
-                <div className="p-3 rounded-xl border border-red-500/40 bg-red-500/10 text-red-300 text-xs font-semibold flex items-center gap-2 animate-fadeIn">
-                  <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
-                  {priceEditError}
-                </div>
-              )}
-
-              <div className="divide-y divide-slate-800">
-                {inventoryItems
-                  .filter(item => {
-                    if (isVendor) return isItemOwner(item);
-                    if (isAdmin && selectedVendorFilter !== 'all') {
-                      return (item.vendorName || 'GKB Official Store') === selectedVendorFilter;
-                    }
-                    return true;
-                  })
-                  .map(item => {
-                    const category = item.category || parseCategory(item);
-                    const isEditingThisPrice = editingPriceItemId === item.id;
-                    const canEdit = isItemOwner(item);
-                    return (
-                      <div key={item.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-bold text-white">{item.title}</span>
-                            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
-                              category === 'phones'
-                                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                                : category === 'gadgets'
-                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                            }`}>
-                              {category === 'phones' ? 'PHONE' : category === 'gadgets' ? 'GADGET' : 'LAPTOP'}
-                            </span>
-                            {/* Vendor badge in row */}
-                            {item.isOfficial ? (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 flex items-center gap-1">
-                                <BadgeCheck className="h-3 w-3 text-cyan-400" /> GKB Official
-                              </span>
-                            ) : (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30 flex items-center gap-1">
-                                <Store className="h-3 w-3 text-amber-400" /> {item.vendorName || 'Vendor'}
-                              </span>
-                            )}
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${item.active ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'}`}>
-                              {item.active ? 'ACTIVE' : 'ARCHIVED'}
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-400 mt-1">
-                            {item.brand} · <span className="font-bold text-amber-300 font-mono">GHS {item.price.toFixed(2)}</span>
-                            {category !== 'gadgets' && ` · ${item.ram} RAM · ${item.storage}`}
-                            {category === 'gadgets' && item.storage && item.storage !== 'None' && item.storage !== 'N/A' && ` · Capacity: ${item.storage}`}
-                          </p>
-
-                          {/* Inline Price Editor when active */}
-                          {isEditingThisPrice && (
-                            <div className="mt-3 flex items-center gap-2 flex-wrap bg-slate-950 p-3 rounded-xl border border-cyan-500/40 animate-fadeIn">
-                              <span className="text-xs font-mono font-bold text-cyan-300 flex items-center gap-1">
-                                <DollarSign className="h-3.5 w-3.5" /> Adjust Price (GHS):
-                              </span>
-                              <div className="relative">
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  min="1"
-                                  value={editPriceValue}
-                                  onChange={e => setEditPriceValue(e.target.value)}
-                                  onKeyDown={e => {
-                                    if (e.key === 'Enter') {
-                                      e.preventDefault();
-                                      void handleSavePrice(item);
-                                    } else if (e.key === 'Escape') {
-                                      handleCancelEditPrice();
-                                    }
-                                  }}
-                                  placeholder="e.g. 4500.00"
-                                  className="w-36 rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-bold text-white focus:border-cyan-400 focus:outline-none"
-                                  autoFocus
-                                />
-                              </div>
-                              <button
-                                type="button"
-                                disabled={priceSavingId === item.id}
-                                onClick={() => void handleSavePrice(item)}
-                                className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1.5 cursor-pointer shadow-sm shadow-cyan-500/20"
-                              >
-                                {priceSavingId === item.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-                                {priceSavingId === item.id ? 'Saving…' : 'Save Price'}
-                              </button>
-                              <button
-                                type="button"
-                                disabled={priceSavingId === item.id}
-                                onClick={handleCancelEditPrice}
-                                className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-all cursor-pointer"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          )}
-                        </div>
-
-                        {canEdit && (
-                          <div className="flex items-center gap-2 shrink-0">
-                            {!isEditingThisPrice && (
-                              <button
-                                type="button"
-                                onClick={() => handleStartEditPrice(item)}
-                                className="text-xs px-3 py-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
-                                title="Edit price of this product"
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                                Edit Price
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => handleToggleInventoryItem(item)}
-                              className={`text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors cursor-pointer ${
-                                item.active
-                                  ? 'border-amber-500/40 text-amber-300 hover:bg-amber-500/10'
-                                  : 'border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10'
-                              }`}
-                            >
-                              {item.active ? 'Archive Listing' : 'Restore Listing'}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-              </div>
-            </section>
-          </div>
-        )}
-
-        {/* ================= CONTACT VIEW ================= */}
-        {activeTab === 'contact' && (
-          <div className="max-w-3xl mx-auto space-y-8 animate-fadeIn">
-            <div className="rounded-3xl border border-cyan-500/30 bg-slate-900/80 p-8 shadow-xl space-y-6">
-              <div>
-                <span className="text-xs font-bold uppercase tracking-widest text-cyan-400">Customer Support & Orders</span>
-                <h2 className="text-2xl sm:text-3xl font-black text-white mt-1">Contact GKB Technologies</h2>
-                <p className="text-sm text-slate-300 mt-2">Have a question about a laptop, mobile phone, or electronic gadget? Need a custom spec or want to verify an order? Reach out to us directly.</p>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-xl border border-slate-800 bg-slate-950 p-4 space-y-1">
-                  <div className="flex items-center gap-2 text-cyan-400 text-xs font-bold uppercase">
-                    <Phone className="h-4 w-4" /> Phone & WhatsApp
-                  </div>
-                  <p className="text-lg font-black text-white">0552117787</p>
-                  <p className="text-xs text-slate-400">Available Monday – Saturday, 8AM to 8PM</p>
-                </div>
-                <div className="rounded-xl border border-slate-800 bg-slate-950 p-4 space-y-1">
-                  <div className="flex items-center gap-2 text-purple-400 text-xs font-bold uppercase">
-                    <Mail className="h-4 w-4" /> Direct Email
-                  </div>
-                  <p className="text-lg font-black text-white">gkbtechnologies@gmail.com</p>
-                  <p className="text-xs text-slate-400">Response within 2-4 hours</p>
-                </div>
-                <div className="rounded-xl border border-slate-800 bg-slate-950 p-4 space-y-1">
-                  <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold uppercase">
-                    <Globe className="h-4 w-4" /> Nationwide Delivery
-                  </div>
-                  <p className="text-lg font-black text-white">Accra, Kumasi & All Regions</p>
-                  <p className="text-xs text-slate-400">Fast delivery with payment verification</p>
-                </div>
-                <div className="rounded-xl border border-slate-800 bg-slate-950 p-4 space-y-1">
-                  <div className="flex items-center gap-2 text-yellow-400 text-xs font-bold uppercase">
-                    <Shield className="h-4 w-4" /> GKB Hardware Guarantee
-                  </div>
-                  <p className="text-lg font-black text-white">Tested & Verified Hardware</p>
-                  <p className="text-xs text-slate-400">Every device undergoes multi-point inspection</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </main>
-
-      {/* Footer */}
-      <footer className="border-t border-slate-800/80 bg-slate-950/80 py-8 text-center text-xs text-slate-500">
-        <p>© {new Date().getFullYear()} GKB Technologies. High-Performance Laptops, Mobile Devices & Electronics.</p>
-        <p className="mt-1 font-mono text-[10px] text-cyan-400/50">Engineered with Precision · Accra, Ghana</p>
-      </footer>
-
-      {/* Login / Signup Modal */}
-      {loginModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="relative w-full max-w-md rounded-2xl border border-cyan-500/40 bg-slate-950 p-6 text-white shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-lg font-bold">{creatingAccount ? 'Create GKB Account' : 'Sign in to GKB'}</h3>
-              <button
-                type="button"
-                onClick={() => setLoginModalOpen(false)}
-                className="text-slate-400 hover:text-white"
-              >
-                ✕
-              </button>
-            </div>
-
-            {loginError && (
-              <p className="text-xs text-red-300 bg-red-500/10 p-2.5 rounded-lg border border-red-500/30">{loginError}</p>
-            )}
-            {loginMessage && (
-              <p className="text-xs text-emerald-300 bg-emerald-500/10 p-2.5 rounded-lg border border-emerald-500/30">{loginMessage}</p>
-            )}
-
-            <form onSubmit={handleLoginSubmit} className="space-y-3 text-xs">
-              {creatingAccount && (
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-slate-300 block mb-1 font-semibold">I want to register as:</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setSignupAccountType('client')}
-                        className={`flex items-center justify-center gap-2 p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                          signupAccountType === 'client'
-                            ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400 shadow-sm shadow-cyan-500/20 ring-1 ring-cyan-400/40'
-                            : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
-                        }`}
-                      >
-                        <User className="h-3.5 w-3.5" />
-                        Buyer / Client
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSignupAccountType('vendor')}
-                        className={`flex items-center justify-center gap-2 p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                          signupAccountType === 'vendor'
-                            ? 'bg-amber-500/20 text-amber-300 border-amber-400 shadow-sm shadow-amber-500/20 ring-1 ring-amber-400/40'
-                            : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
-                        }`}
-                      >
-                        <Store className="h-3.5 w-3.5 text-amber-400" />
-                        Vendor / Seller
-                      </button>
-                    </div>
-                  </div>
-
-                  {signupAccountType === 'vendor' && (
-                    <label className="text-slate-300 block animate-fadeIn">
-                      <span className="text-amber-300 font-bold flex items-center gap-1.5">
-                        <Store className="h-3.5 w-3.5 text-amber-400" /> Store / Business Name *
-                      </span>
-                      <input
-                        type="text"
-                        required
-                        value={signupBusinessName}
-                        onChange={e => setSignupBusinessName(e.target.value)}
-                        placeholder="e.g. Apex Laptops Hub, Swift Computers..."
-                        className="mt-1 w-full rounded-lg border border-amber-500/50 bg-slate-900 px-3 py-2 text-white focus:border-amber-400 focus:outline-none"
-                      />
-                      <span className="text-[10px] text-slate-400 mt-1 block">
-                        Your store name will be displayed on all laptops and products you publish to the marketplace.
-                      </span>
-                    </label>
-                  )}
-                </div>
-              )}
-
-              {creatingAccount && (
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="text-slate-300">
-                    First Name
-                    <input
-                      type="text"
-                      required
-                      value={signupFirstName}
-                      onChange={e => setSignupFirstName(e.target.value)}
-                      placeholder="e.g. Kwame"
-                      className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-white focus:border-cyan-400 focus:outline-none"
-                    />
-                  </label>
-                  <label className="text-slate-300">
-                    Last Name
-                    <input
-                      type="text"
-                      required
-                      value={signupLastName}
-                      onChange={e => setSignupLastName(e.target.value)}
-                      placeholder="e.g. Mensah"
-                      className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-white focus:border-cyan-400 focus:outline-none"
-                    />
-                  </label>
-                </div>
-              )}
-
-              <label className="text-slate-300 block">
-                Email Address or Phone Number
-                <input
-                  type="text"
-                  required
-                  value={loginEmail}
-                  onChange={e => setLoginEmail(e.target.value)}
-                  placeholder="name@gmail.com or 0552117787"
-                  className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-white focus:border-cyan-400 focus:outline-none"
-                />
-              </label>
-
-              {creatingAccount && (
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="text-slate-300">
-                    Phone Number
-                    <input
-                      type="tel"
-                      required
-                      value={signupPhone}
-                      onChange={e => setSignupPhone(e.target.value)}
-                      placeholder="0552117787"
-                      className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-white focus:border-cyan-400 focus:outline-none"
-                    />
-                  </label>
-                  <label className="text-slate-300">
-                    Delivery City / Town
-                    <input
-                      type="text"
-                      required
-                      value={signupLocation}
-                      onChange={e => setSignupLocation(e.target.value)}
-                      placeholder="Accra, Kumasi..."
-                      className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-white focus:border-cyan-400 focus:outline-none"
-                    />
-                  </label>
-                </div>
-              )}
-
-              <label className="text-slate-300 block">
-                Password
-                <input
-                  type="password"
-                  required
-                  value={loginPassword}
-                  onChange={e => setLoginPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-white focus:border-cyan-400 focus:outline-none"
-                />
-              </label>
-
-              <button
-                type="submit"
-                disabled={loginBusy}
-                className="w-full mt-2 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-600 py-2.5 font-bold text-xs uppercase tracking-wider text-black shadow-lg shadow-cyan-500/20 hover:scale-[1.02] transition-all disabled:opacity-50 cursor-pointer"
-              >
-                {loginBusy ? 'Authenticating…' : (creatingAccount ? 'Complete Registration' : 'Sign In')}
-              </button>
-            </form>
-
-            <div className="text-center pt-2 border-t border-slate-800/80">
-              <button
-                type="button"
-                onClick={() => {
-                  setCreatingAccount(v => !v);
-                  setLoginError('');
-                  setLoginMessage('');
-                }}
-                className="text-xs text-cyan-400 hover:underline"
-              >
-                {creatingAccount ? 'Already registered? Sign in' : "Don't have an account? Sign up in 10 seconds"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+              );
 }
