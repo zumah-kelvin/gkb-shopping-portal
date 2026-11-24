@@ -351,7 +351,7 @@ const initialDemoProducts: InventoryItem[] = [
     title: 'iPhone 13 Pro · 128GB Sierra Blue',
     highlights: '[Category: Mobile Phones]\nApple A15 Bionic chip, 6.1" Super Retina XDR with ProMotion 120Hz, Triple 12MP Pro camera system with LiDAR scanner, Ceramic Shield front, 5G cellular, Battery Health 91%. Clean UK used.',
     price: 5200.00,
-    ram: '6GB',
+    ram: 'N/A',
     storage: '128GB',
     image_path: '',
     active: true
@@ -363,7 +363,7 @@ const initialDemoProducts: InventoryItem[] = [
     title: 'Samsung Galaxy S22 Ultra 5G · 256GB Phantom Black',
     highlights: '[Category: Mobile Phones]\nSnapdragon 8 Gen 1 processor, 6.8" Dynamic AMOLED 2X, Embedded S-Pen stylus, 108MP Quad Camera with 100x Space Zoom, 5,000mAh battery with 45W fast charging, Dual SIM.',
     price: 5500.00,
-    ram: '12GB',
+    ram: 'N/A',
     storage: '256GB',
     image_path: '',
     active: true
@@ -375,7 +375,7 @@ const initialDemoProducts: InventoryItem[] = [
     title: 'Tecno Camon 30 Pro 5G · 256GB Space Silver',
     highlights: '[Category: Mobile Phones]\nMediaTek Dimensity 8200 Ultimate 5G chip, 50MP Sony IMX890 OIS camera, 144Hz 1.5K AMOLED curved display, 70W Ultra Charge with 5,000mAh battery, Dolby Atmos stereo dual speakers.',
     price: 2950.00,
-    ram: '8GB',
+    ram: 'N/A',
     storage: '256GB',
     image_path: '',
     active: true
@@ -846,16 +846,18 @@ export default function ShoppingPortal() {
         const legacyAllowedRam = ['4GB', '8GB', '16GB', '32GB', '64GB'];
         const legacyAllowedStorage = ['128GB', '256GB', '512GB', '1TB', '2TB', '4TB'];
 
-        const rawSelectedRam = inventoryCategory === 'gadgets' ? 'N/A' : inventoryRam;
+        const rawSelectedRam = (inventoryCategory === 'phones' || inventoryCategory === 'gadgets') ? 'N/A' : inventoryRam;
         const rawSelectedStorage = inventoryCategory === 'gadgets'
           ? (inventoryGadgetCapacity !== 'None / N/A' ? inventoryGadgetCapacity : 'N/A')
           : inventoryStorage;
 
         // Metadata tags to guarantee true requested specs are stored and displayed accurately
-        const specTags = `[Spec RAM: ${rawSelectedRam}][Spec Storage: ${rawSelectedStorage}]`;
+        const specTags = inventoryCategory === 'phones'
+          ? `[Spec Storage: ${rawSelectedStorage}]`
+          : `[Spec RAM: ${rawSelectedRam}][Spec Storage: ${rawSelectedStorage}]`;
         const enrichedHighlights = `${categoryTag}\n${vendorTag}\n${specTags}\n${inventoryHighlights.trim()}`;
 
-        const preferredRam = inventoryCategory === 'gadgets' ? '4GB' : inventoryRam;
+        const preferredRam = (inventoryCategory === 'phones' || inventoryCategory === 'gadgets') ? '4GB' : inventoryRam;
         const preferredStorage = inventoryCategory === 'gadgets'
           ? (inventoryGadgetCapacity.includes('GB') || inventoryGadgetCapacity.includes('TB') ? inventoryGadgetCapacity : '128GB')
           : inventoryStorage;
@@ -1072,7 +1074,7 @@ export default function ShoppingPortal() {
           setInventoryStorage(laptopStorageOptions[2]); // 512GB
         } else if (cat === 'phones') {
           setInventoryBrandSelect(phoneBrandOptions[0]);
-          setInventoryRam(phoneRamOptions[2]); // 6GB
+          setInventoryRam('N/A');
           setInventoryStorage(phoneStorageOptions[1]); // 128GB
         } else {
           setInventoryBrandSelect(gadgetBrandOptions[0]);
@@ -1299,7 +1301,11 @@ export default function ShoppingPortal() {
 
           setInventoryTitle(finalTitle);
           if (detectedPrice) setInventoryPrice(detectedPrice);
-          if (detectedRam) setInventoryRam(detectedRam);
+          if (detectedCategory === 'laptops' && detectedRam) {
+            setInventoryRam(detectedRam);
+          } else {
+            setInventoryRam('N/A');
+          }
           if (detectedStorage) setInventoryStorage(detectedStorage);
           if (finalHighlights) setInventoryHighlights(finalHighlights);
 
@@ -1308,7 +1314,7 @@ export default function ShoppingPortal() {
           details.push(`Brand: ${detectedBrand}`);
           details.push(`Model: ${finalTitle}`);
           if (detectedPrice) details.push(`Price: GHS ${Number(detectedPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}`);
-          if (detectedRam) details.push(`RAM: ${detectedRam}`);
+          if (detectedCategory === 'laptops' && detectedRam) details.push(`RAM: ${detectedRam}`);
           if (detectedStorage) details.push(`Storage: ${detectedStorage}`);
 
           setSmartParseDetails(details);
@@ -1824,14 +1830,11 @@ export default function ShoppingPortal() {
 
                           {isPhone && (
                             <>
-                              <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 font-mono text-cyan-300">
-                                {item.storage} Space
-                              </span>
-                              <span className="rounded-md border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 font-mono text-purple-300">
-                                {item.ram} RAM
+                              <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-0.5 font-mono text-cyan-300 font-bold">
+                                {item.storage} Storage
                               </span>
                               <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-300">
-                                Smartphone Stock
+                                Genuine Handset
                               </span>
                             </>
                           )}
@@ -2377,28 +2380,16 @@ WiFi
                 )}
 
                 {inventoryCategory === 'phones' && (
-                  <>
-                    <label className="text-xs font-semibold text-slate-300">
-                      Mobile Internal Storage (Space)
-                      <select
-                        value={inventoryStorage}
-                        onChange={e => setInventoryStorage(e.target.value)}
-                        className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-cyan-400 focus:outline-none transition-colors"
-                      >
-                        {phoneStorageOptions.map(opt => <option key={opt}>{opt}</option>)}
-                      </select>
-                    </label>
-                    <label className="text-xs font-semibold text-slate-300">
-                      Phone RAM
-                      <select
-                        value={inventoryRam}
-                        onChange={e => setInventoryRam(e.target.value)}
-                        className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-cyan-400 focus:outline-none transition-colors"
-                      >
-                        {phoneRamOptions.map(opt => <option key={opt}>{opt}</option>)}
-                      </select>
-                    </label>
-                  </>
+                  <label className="text-xs font-semibold text-slate-300 sm:col-span-2">
+                    Mobile Internal Storage Capacity
+                    <select
+                      value={inventoryStorage}
+                      onChange={e => setInventoryStorage(e.target.value)}
+                      className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-cyan-400 focus:outline-none transition-colors"
+                    >
+                      {phoneStorageOptions.map(opt => <option key={opt}>{opt}</option>)}
+                    </select>
+                  </label>
                 )}
 
                 {inventoryCategory === 'gadgets' && (
@@ -2562,7 +2553,8 @@ WiFi
                                       </div>
                                       <p className="text-xs text-slate-400 mt-1">
                                         {normalizeBrand(item.brand)} · <span className="font-bold text-amber-300 font-mono">GHS {item.price.toFixed(2)}</span>
-                                        {category !== 'gadgets' && ` · ${item.ram} RAM · ${item.storage}`}
+                                        {category === 'laptops' && ` · ${item.ram} RAM · ${item.storage}`}
+                                        {category === 'phones' && ` · Storage: ${item.storage}`}
                                         {category === 'gadgets' && item.storage && item.storage !== 'None' && item.storage !== 'N/A' && ` · Capacity: ${item.storage}`}
                                       </p>
 
