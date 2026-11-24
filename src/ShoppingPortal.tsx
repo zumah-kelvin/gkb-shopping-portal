@@ -8,7 +8,7 @@ import {
   Sun, Moon, Zap, Tag, RefreshCw, PlusCircle, Search, Filter,
   Smartphone, HardDrive, Layers, Cpu, Copy, Check, Info,
   SlidersHorizontal, Sparkles, Folder, Pencil, DollarSign, X,
-  Store, BadgeCheck, Building
+  Store, BadgeCheck, Building, Trash2
 } from 'lucide-react';
 
 export type ProductCategory = 'laptops' | 'phones' | 'gadgets';
@@ -521,6 +521,11 @@ export default function ShoppingPortal() {
   const [priceSavingId, setPriceSavingId] = useState<string | null>(null);
   const [priceEditError, setPriceEditError] = useState<string>('');
   const [priceEditSuccess, setPriceEditSuccess] = useState<string>('');
+
+  // Product deletion state (Admin confirmation)
+  const [deletingProduct, setDeletingProduct] = useState<InventoryItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -970,20 +975,72 @@ export default function ShoppingPortal() {
     // Archive item toggle (Admin or Item Owner Vendor)
     const handleToggleInventoryItem = async (item: InventoryItem) => {
       if (!isItemOwner(item) || !relaySupabase) return;
-        try {
-          const { data, error } = await relaySupabase
-            .from('gkb_inventory_items')
-            .update({ active: !item.active, updated_at: new Date().toISOString() })
-            .eq('id', item.id)
-            .select()
-            .single();
-          if (error) throw error;
-          setInventoryItems(current => current.map(dev => dev.id === item.id ? { ...data, price: Number(data.price), category: item.category, gadgetType: item.gadgetType } as InventoryItem : dev));
-          setInventoryItems(current => current.map(dev => dev.id === item.id ? { ...dev, ...data, price: Number(data.price) } as InventoryItem : dev));
-        } catch (error) {
-          console.error('Failed to update product state:', error);
+      try {
+        const { data, error } = await relaySupabase
+          .from('gkb_inventory_items')
+          .update({ active: !item.active, updated_at: new Date().toISOString() })
+          .eq('id', item.id)
+          .select()
+          .single();
+        if (error) throw error;
+        setInventoryItems(current => current.map(dev => dev.id === item.id ? { ...data, price: Number(data.price), category: item.category, gadgetType: item.gadgetType } as InventoryItem : dev));
+        setInventoryItems(current => current.map(dev => dev.id === item.id ? { ...dev, ...data, price: Number(data.price) } as InventoryItem : dev));
+      } catch (error) {
+        console.error('Failed to update product state:', error);
+      }
+    };
+
+    // Permanent Product Deletion (Admin Only with Confirmation)
+    const handleConfirmDelete = async () => {
+      if (!deletingProduct || !relaySupabase) return;
+      if (!isAdmin) {
+        setDeleteError('Only administrators can completely delete inventory items.');
+        return;
+      }
+
+      setIsDeleting(true);
+      setDeleteError('');
+
+      try {
+        // 1. Delete image file from Supabase storage if present
+        if (deletingProduct.image_path) {
+          try {
+            await relaySupabase.storage
+              .from(inventoryImageBucket)
+              .remove([deletingProduct.image_path]);
+          } catch {
+            // ignore image remove failure
+          }
         }
-      };
+
+        // 2. Delete item from gkb_inventory_items in Supabase
+        const { error } = await relaySupabase
+          .from('gkb_inventory_items')
+          .delete()
+          .eq('id', deletingProduct.id);
+
+        if (error) {
+          console.warn('Permanent delete query error:', error);
+          const msg = error.message || 'Permission denied or RLS policy missing for DELETE.';
+          setDeleteError(`Database note: ${msg}. If RLS blocks DELETE, run the SQL helper in Manage Inventory to grant DELETE.`);
+          setIsDeleting(false);
+          return;
+        }
+
+        // 3. Update local state
+        const deletedTitle = deletingProduct.title;
+        setInventoryItems(current => current.filter(item => item.id !== deletingProduct.id));
+        setDeletingProduct(null);
+        setPriceEditSuccess(`"${deletedTitle}" was completely removed from the store and database.`);
+        setTimeout(() => setPriceEditSuccess(''), 4500);
+      } catch (err: unknown) {
+        console.error('Delete product failed:', err);
+        const msg = err instanceof Error ? err.message : 'Failed to delete product.';
+        setDeleteError(msg);
+      } finally {
+        setIsDeleting(false);
+      }
+    };
 
       // Price editing handlers (Strictly Admin Only)
       // Price editing handlers (Admin or Item Owner Vendor)
@@ -2004,7 +2061,7 @@ export default function ShoppingPortal() {
                     <button
                       type="button"
                       onClick={() => {
-                        const sql = `-- GKB Shopping Portal Multi-Category & Multi-Vendor Schema Migration\nALTER TABLE public.gkb_inventory_items ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'laptops';\nALTER TABLE public.gkb_inventory_items ADD COLUMN IF NOT EXISTS vendor_id TEXT;\nALTER TABLE public.gkb_inventory_items ADD COLUMN IF NOT EXISTS vendor_name TEXT DEFAULT 'GKB Official Store';\nALTER TABLE public.gkb_inventory_items ADD COLUMN IF NOT EXISTS vendor_phone TEXT DEFAULT '0552117787';\nALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_items_ram_check;\nALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_items_storage_check;\nALTER TABLE public.gkb_inventory_items ALTER COLUMN ram DROP NOT NULL;\nALTER TABLE public.gkb_inventory_items ALTER COLUMN storage DROP NOT NULL;`;
+                        const sql = `-- GKB Shopping Portal Schema Migration\nALTER TABLE public.gkb_inventory_items ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'laptops';\nALTER TABLE public.gkb_inventory_items ADD COLUMN IF NOT EXISTS vendor_id TEXT;\nALTER TABLE public.gkb_inventory_items ADD COLUMN IF NOT EXISTS vendor_name TEXT DEFAULT 'GKB Official Store';\nALTER TABLE public.gkb_inventory_items ADD COLUMN IF NOT EXISTS vendor_phone TEXT DEFAULT '0552117787';\nALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_items_ram_check;\nALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_items_storage_check;\nALTER TABLE public.gkb_inventory_items ALTER COLUMN ram DROP NOT NULL;\nALTER TABLE public.gkb_inventory_items ALTER COLUMN storage DROP NOT NULL;\nGRANT DELETE ON TABLE public.gkb_inventory_items TO authenticated;\nDROP POLICY IF EXISTS gkb_inventory_delete_admin ON public.gkb_inventory_items;\nCREATE POLICY gkb_inventory_delete_admin ON public.gkb_inventory_items FOR DELETE TO authenticated USING (public.is_gkb_admin());`;
                         navigator.clipboard.writeText(sql);
                         setSqlCopied(true);
                         setTimeout(() => setSqlCopied(false), 2500);
@@ -2016,13 +2073,16 @@ export default function ShoppingPortal() {
                     </button>
                   </div>
                   <pre className="text-[11px] font-mono text-slate-300 bg-slate-900 p-3 rounded-lg overflow-x-auto border border-slate-800">
-{`-- Run once in Supabase SQL Editor if you want native category & vendor columns:
+{`-- Run once in Supabase SQL Editor if you want native category, vendor, & delete permissions:
 ALTER TABLE public.gkb_inventory_items ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'laptops';
 ALTER TABLE public.gkb_inventory_items ADD COLUMN IF NOT EXISTS vendor_id TEXT;
 ALTER TABLE public.gkb_inventory_items ADD COLUMN IF NOT EXISTS vendor_name TEXT DEFAULT 'GKB Official Store';
 ALTER TABLE public.gkb_inventory_items ADD COLUMN IF NOT EXISTS vendor_phone TEXT DEFAULT '0552117787';
 ALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_items_ram_check;
-ALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_items_storage_check;`}
+ALTER TABLE public.gkb_inventory_items DROP CONSTRAINT IF EXISTS gkb_inventory_items_storage_check;
+GRANT DELETE ON TABLE public.gkb_inventory_items TO authenticated;
+DROP POLICY IF EXISTS gkb_inventory_delete_admin ON public.gkb_inventory_items;
+CREATE POLICY gkb_inventory_delete_admin ON public.gkb_inventory_items FOR DELETE TO authenticated USING (public.is_gkb_admin());`}
                   </pre>
                   <p className="text-[11px] text-slate-400">
                     *Note: Our portal automatically preserves all categories, vendors, and specs in highlights metadata even if you haven't run the SQL yet!
@@ -2630,6 +2690,20 @@ WiFi
                                           {item.active ? 'Archive Listing' : 'Restore Listing'}
                                         </button>
                                       )}
+                                      {isAdmin && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setDeletingProduct(item);
+                                            setDeleteError('');
+                                          }}
+                                          className="text-xs px-3 py-1.5 rounded-lg border border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20 font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
+                                          title="Permanently delete product"
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                          Delete
+                                        </button>
+                                      )}
                                     </div>
                                   </div>
                                 );
@@ -2862,6 +2936,105 @@ WiFi
                           className="text-xs text-cyan-400 hover:underline"
                         >
                           {creatingAccount ? 'Already registered? Sign in' : "Don't have an account? Sign up in 10 seconds"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Delete Confirmation Modal */}
+                {deletingProduct && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
+                    <div className="relative w-full max-w-md rounded-2xl border border-red-500/50 bg-slate-950 p-6 text-white shadow-2xl space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <div className="flex items-center gap-2 text-red-400">
+                          <div className="p-2 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20">
+                            <Trash2 className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <h3 className="text-base font-bold text-white">Permanently Delete Product</h3>
+                            <p className="text-[11px] text-red-400/80 font-medium">Confirmation required</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!isDeleting) {
+                              setDeletingProduct(null);
+                              setDeleteError('');
+                            }
+                          }}
+                          disabled={isDeleting}
+                          className="text-slate-400 hover:text-white transition-colors disabled:opacity-50 cursor-pointer text-lg px-2"
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      <div className="space-y-3 text-xs">
+                        <p className="text-slate-300 leading-relaxed">
+                          Are you sure you want to permanently delete this product? It will be completely removed from the store catalog, database, and storage.
+                          <span className="block text-red-300 font-semibold mt-1">⚠️ This action cannot be reversed.</span>
+                        </p>
+
+                        {/* Product Preview Card */}
+                        <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-3.5 space-y-2">
+                          <div className="flex items-center gap-3">
+                            {deletingProduct.image_path && relaySupabase ? (
+                              <img
+                                src={relaySupabase.storage.from(inventoryImageBucket).getPublicUrl(deletingProduct.image_path).data.publicUrl}
+                                alt={deletingProduct.title}
+                                className="h-12 w-12 rounded-lg object-cover border border-slate-700 shrink-0 bg-slate-950"
+                              />
+                            ) : (
+                              <div className="h-12 w-12 rounded-lg bg-slate-800 flex items-center justify-center text-slate-500 shrink-0 border border-slate-700">
+                                <Package className="h-6 w-6" />
+                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="font-bold text-white text-sm truncate">{deletingProduct.title}</p>
+                              <p className="text-slate-400 text-[11px] mt-0.5">
+                                {normalizeBrand(deletingProduct.brand)} · <span className="font-mono text-amber-300 font-bold">GHS {deletingProduct.price.toFixed(2)}</span>
+                              </p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                                  {(deletingProduct.category || parseCategory(deletingProduct)).toUpperCase()}
+                                </span>
+                                <span className="text-[10px] text-slate-400">
+                                  {deletingProduct.vendorName || (deletingProduct.isOfficial ? 'GKB Official' : 'Direct Stock')}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {deleteError && (
+                          <p className="text-xs text-red-300 bg-red-500/10 p-3 rounded-lg border border-red-500/30 leading-relaxed">
+                            {deleteError}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-800/80">
+                        <button
+                          type="button"
+                          disabled={isDeleting}
+                          onClick={() => {
+                            setDeletingProduct(null);
+                            setDeleteError('');
+                          }}
+                          className="px-4 py-2 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isDeleting}
+                          onClick={() => void handleConfirmDelete()}
+                          className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-lg shadow-red-600/30 cursor-pointer disabled:opacity-50"
+                        >
+                          {isDeleting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                          {isDeleting ? 'Deleting Permanently…' : 'Yes, Delete Permanently'}
                         </button>
                       </div>
                     </div>
