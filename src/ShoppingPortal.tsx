@@ -8,7 +8,8 @@ import {
   Sun, Moon, Zap, Tag, RefreshCw, PlusCircle, Search, Filter,
   Smartphone, HardDrive, Layers, Cpu, Copy, Check, Info,
   SlidersHorizontal, Sparkles, Folder, Pencil, DollarSign, X,
-  Store, BadgeCheck, Building, Trash2
+  Store, BadgeCheck, Building, Trash2, ChevronLeft, ChevronRight,
+  Flame, Pause, Play
 } from 'lucide-react';
 
 export type ProductCategory = 'laptops' | 'phones' | 'gadgets';
@@ -554,6 +555,122 @@ export default function ShoppingPortal() {
   const [inventoryMessage, setInventoryMessage] = useState('');
   const [sqlCopied, setSqlCopied] = useState(false);
   const [showSqlHelper, setShowSqlHelper] = useState(false);
+
+  // Jumia-style daily advertising banner carousel state (at least 10 products, shuffle between phone, gadget, laptop)
+  const [adSlideIndex, setAdSlideIndex] = useState(0);
+  const [isAdPaused, setIsAdPaused] = useState(false);
+  const touchStartX = useRef<number | null>(null);
+  const touchDeltaX = useRef<number>(0);
+
+  // Memoized daily advertised products: at least 10 products, daily shuffled and alternating round-robin between phones, laptops, and gadgets
+  const advertisedProducts = React.useMemo(() => {
+    const activePool = inventoryItems.filter(item => item.active);
+    const sourcePool = activePool.length > 0 ? activePool : initialDemoProducts;
+
+    const laptops = sourcePool.filter(i => (i.category || parseCategory(i)) === 'laptops');
+    const phones = sourcePool.filter(i => (i.category || parseCategory(i)) === 'phones');
+    const gadgets = sourcePool.filter(i => (i.category || parseCategory(i)) === 'gadgets');
+
+    // Deterministic daily shuffle seed derived from current date (YYYY-MM-DD)
+    const todayStr = new Date().toISOString().slice(0, 10);
+    let seed = 0;
+    for (let i = 0; i < todayStr.length; i++) {
+      seed = ((seed * 31) + todayStr.charCodeAt(i)) & 0xffffffff;
+    }
+
+    const shuffleArray = <T,>(arr: T[], s: number): T[] => {
+      const copy = [...arr];
+      let currentSeed = s;
+      for (let i = copy.length - 1; i > 0; i--) {
+        currentSeed = (currentSeed * 9301 + 49297) % 233280;
+        const rnd = currentSeed / 233280;
+        const j = Math.floor(rnd * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      return copy;
+    };
+
+    const shuffledPhones = shuffleArray(phones.length > 0 ? phones : sourcePool, seed + 101);
+    const shuffledLaptops = shuffleArray(laptops.length > 0 ? laptops : sourcePool, seed + 202);
+    const shuffledGadgets = shuffleArray(gadgets.length > 0 ? gadgets : sourcePool, seed + 303);
+
+    // Round-robin interleave: Phone -> Laptop -> Gadget -> Phone -> Laptop -> Gadget...
+    const interleaved: InventoryItem[] = [];
+    const maxLen = Math.max(shuffledPhones.length, shuffledLaptops.length, shuffledGadgets.length, 4);
+
+    for (let i = 0; i < maxLen; i++) {
+      if (shuffledPhones.length > 0) interleaved.push(shuffledPhones[i % shuffledPhones.length]);
+      if (shuffledLaptops.length > 0) interleaved.push(shuffledLaptops[i % shuffledLaptops.length]);
+      if (shuffledGadgets.length > 0) interleaved.push(shuffledGadgets[i % shuffledGadgets.length]);
+    }
+
+    // Deduplicate unique items first up to 10
+    const result: InventoryItem[] = [];
+    const seenIds = new Set<string>();
+
+    for (const item of interleaved) {
+      if (!seenIds.has(item.id)) {
+        seenIds.add(item.id);
+        result.push(item);
+      }
+      if (result.length >= 10) break;
+    }
+
+    // Ensure there are at least 10 advertised items daily by cycling if fewer than 10 unique exist
+    let cycleIndex = 0;
+    while (result.length < 10 && interleaved.length > 0) {
+      result.push(interleaved[cycleIndex % interleaved.length]);
+      cycleIndex++;
+    }
+
+    return result.slice(0, 10);
+  }, [inventoryItems]);
+
+  // Next / Previous slide handlers
+  const nextAdSlide = useCallback(() => {
+    setAdSlideIndex(curr => (curr + 1) % Math.max(1, advertisedProducts.length));
+  }, [advertisedProducts.length]);
+
+  const prevAdSlide = useCallback(() => {
+    setAdSlideIndex(curr => (curr - 1 + Math.max(1, advertisedProducts.length)) % Math.max(1, advertisedProducts.length));
+  }, [advertisedProducts.length]);
+
+  // Touch gesture handlers for mobile swipe left / right
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchDeltaX.current = 0;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStartX.current !== null) {
+      touchDeltaX.current = e.touches[0].clientX - touchStartX.current;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (touchStartX.current !== null) {
+      if (touchDeltaX.current < -40) {
+        // Swiped Left -> Advance to next ad slide
+        nextAdSlide();
+      } else if (touchDeltaX.current > 40) {
+        // Swiped Right -> Back to previous ad slide
+        prevAdSlide();
+      }
+    }
+    touchStartX.current = null;
+    touchDeltaX.current = 0;
+  };
+
+  // Auto-advance interval (swipe left effect every 4.5 seconds like Jumia)
+  useEffect(() => {
+    if (advertisedProducts.length <= 1 || isAdPaused) return;
+
+    const timer = setInterval(() => {
+      setAdSlideIndex(curr => (curr + 1) % advertisedProducts.length);
+    }, 4500);
+
+    return () => clearInterval(timer);
+  }, [advertisedProducts.length, isAdPaused]);
 
   // Ownership helper: Admin owns all, Vendor owns their own uploads
   const isItemOwner = (item: InventoryItem) => {
@@ -1578,37 +1695,256 @@ export default function ShoppingPortal() {
             {/* ================= STOREFRONT CATALOG ================= */}
             {activeTab === 'catalog' && (
       <div className="space-y-8 animate-fadeIn">
-        {/* Hero Banner */}
-        <section className="relative overflow-hidden rounded-3xl border border-cyan-500/30 bg-gradient-to-r from-slate-900 via-purple-950/40 to-slate-900 p-8 sm:p-12 shadow-2xl">
-          <div className="relative z-10 max-w-2xl space-y-4">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-1 text-xs font-bold font-mono tracking-wider text-cyan-300 uppercase">
-              <Sparkles className="h-3.5 w-3.5" /> GKB Tech & Electronics Marketplace
-            </span>
-            <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-white leading-tight">
-              Premium <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-sky-300 to-purple-400">Laptops, Phones</span> & Electronic Gadgets
-            </h2>
-            <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
-              Verified stock with nationwide Ghana delivery. From top-tier engineering workstations and MacBooks to the latest smartphones, hard drives, and custom tech gear.
-            </p>
-            <div className="flex flex-wrap items-center gap-3 pt-2">
+        {/* ================= JUMIA-STYLE DAILY ADVERTISING BANNER CAROUSEL ================= */}
+        <section
+          aria-label="Daily Featured Tech Advertisements"
+          className="relative overflow-hidden rounded-3xl border border-cyan-500/30 bg-slate-950 shadow-2xl group select-none"
+          onMouseEnter={() => setIsAdPaused(true)}
+          onMouseLeave={() => setIsAdPaused(false)}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
+          {/* Subtle Top Control Strip: Deal Counter & Daily Status */}
+          <div className="absolute top-3.5 left-4 right-4 z-20 flex items-center justify-between pointer-events-none">
+            <div className="flex items-center gap-2 pointer-events-auto">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-slate-950/80 px-3 py-1 text-[11px] font-bold font-mono tracking-wider text-amber-300 shadow-sm backdrop-blur-md">
+                <Flame className="h-3.5 w-3.5 text-amber-400 animate-pulse" />
+                DAILY FEATURED DEALS
+              </span>
+              <span className="hidden sm:inline-flex items-center gap-1 rounded-full border border-cyan-500/30 bg-slate-950/70 px-2.5 py-1 text-[10px] font-mono text-cyan-300 backdrop-blur-md">
+                <Sparkles className="h-3 w-3 text-cyan-400" />
+                Auto-Shuffle · Laptops, Phones & Gadgets
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 pointer-events-auto">
+              <span className="rounded-full border border-slate-700/80 bg-slate-950/80 px-2.5 py-1 text-[10px] font-mono font-bold text-slate-300 backdrop-blur-md">
+                Deal {((adSlideIndex % Math.max(1, advertisedProducts.length)) + 1)} of {advertisedProducts.length}
+              </span>
               <button
                 type="button"
-                onClick={() => setActiveTab('order')}
-                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-600 px-5 py-3 text-sm font-bold text-black shadow-lg shadow-cyan-500/25 hover:scale-105 transition-all"
+                onClick={() => setIsAdPaused(p => !p)}
+                className="p-1.5 rounded-full border border-slate-700/80 bg-slate-950/80 hover:bg-slate-900 text-slate-300 transition-colors backdrop-blur-md cursor-pointer"
+                title={isAdPaused ? 'Resume auto-slides' : 'Pause auto-slides'}
               >
-                <ShoppingBag className="h-4 w-4" /> Place an Order
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const el = document.getElementById('catalog-grid');
-                  el?.scrollIntoView({ behavior: 'smooth' });
-                }}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/70 px-5 py-3 text-sm font-semibold text-slate-200 hover:border-cyan-400 hover:text-cyan-300 transition-colors"
-              >
-                Browse Listings
+                {isAdPaused ? <Play className="h-3 w-3 text-emerald-400" /> : <Pause className="h-3 w-3 text-slate-400" />}
               </button>
             </div>
+          </div>
+
+          {/* Sliding Track: swipe left effect */}
+          <div
+            className="flex w-full transition-transform duration-500 ease-out"
+            style={{ transform: `translateX(-${(adSlideIndex % Math.max(1, advertisedProducts.length)) * 100}%)` }}
+          >
+            {advertisedProducts.map((item, index) => {
+              const category = item.category || parseCategory(item);
+              const isLaptop = category === 'laptops';
+              const isPhone = category === 'phones';
+              const isGadget = category === 'gadgets';
+
+              const imageUrl = item.image_path && relaySupabase
+                ? relaySupabase.storage.from(inventoryImageBucket).getPublicUrl(item.image_path).data.publicUrl
+                : null;
+
+              const cleanDesc = cleanHighlights(item.highlights);
+
+              // Category-based background theme
+              const bgGradient = isPhone
+                ? 'from-slate-950 via-purple-950/50 to-slate-950'
+                : isGadget
+                  ? 'from-slate-950 via-emerald-950/40 to-slate-950'
+                  : 'from-slate-950 via-cyan-950/40 to-slate-900';
+
+              const glowColor = isPhone ? 'bg-purple-600/15' : isGadget ? 'bg-emerald-600/15' : 'bg-cyan-600/15';
+
+              return (
+                <div
+                  key={`${item.id}-${index}`}
+                  className={`w-full flex-shrink-0 min-w-full relative overflow-hidden bg-gradient-to-r ${bgGradient} px-6 sm:px-12 pt-14 pb-14 sm:pb-16`}
+                >
+                  {/* Category Ambient Glow Orbs */}
+                  <div className={`absolute top-0 right-1/4 w-96 h-96 ${glowColor} rounded-full blur-[100px] pointer-events-none`} />
+                  <div className="absolute bottom-0 left-10 w-72 h-72 bg-purple-600/10 rounded-full blur-[80px] pointer-events-none" />
+
+                  <div className="relative z-10 grid gap-8 lg:grid-cols-12 lg:items-center">
+                    {/* Left Column: Product Info & Actions (7 cols) */}
+                    <div className="space-y-4 lg:col-span-7">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Category Tag */}
+                        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold font-mono tracking-wider uppercase border shadow-sm ${
+                          isPhone
+                            ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                            : isGadget
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                              : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                        }`}>
+                          {isPhone ? <Smartphone className="h-3.5 w-3.5" /> : isGadget ? <HardDrive className="h-3.5 w-3.5" /> : <Laptop className="h-3.5 w-3.5" />}
+                          {isPhone ? 'Smartphone Deal' : isGadget ? 'Electronic Gadget' : 'High-Performance Laptop'}
+                        </span>
+
+                        {/* Brand Pill */}
+                        <span className="rounded-full border border-slate-700 bg-slate-900/90 px-2.5 py-1 text-xs font-bold text-slate-200">
+                          {normalizeBrand(item.brand)}
+                        </span>
+
+                        {/* Vendor attribution badge */}
+                        {item.isOfficial ? (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-bold text-cyan-300">
+                            <BadgeCheck className="h-3 w-3 text-cyan-400" /> GKB Official
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-bold text-amber-300">
+                            <Store className="h-3 w-3 text-amber-400" /> {item.vendorName || 'Verified Vendor'}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Product Title */}
+                      <div>
+                        <h2 className="text-2xl sm:text-4xl font-black tracking-tight text-white leading-tight line-clamp-2">
+                          {item.title}
+                        </h2>
+                      </div>
+
+                      {/* Specs Row */}
+                      <div className="flex flex-wrap items-center gap-2 text-xs font-medium">
+                        {isLaptop && item.ram && item.ram !== 'N/A' && (
+                          <span className="inline-flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-900/90 px-2.5 py-1.5 text-cyan-300 font-mono">
+                            <Cpu className="h-3.5 w-3.5 text-cyan-400" /> {item.ram} RAM
+                          </span>
+                        )}
+                        {item.storage && item.storage !== 'None' && item.storage !== 'N/A' && (
+                          <span className="inline-flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-900/90 px-2.5 py-1.5 text-purple-300 font-mono">
+                            <HardDrive className="h-3.5 w-3.5 text-purple-400" /> {item.storage}
+                          </span>
+                        )}
+                        <span className="inline-flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-900/90 px-2.5 py-1.5 text-emerald-300 font-mono">
+                          <CheckCircle className="h-3.5 w-3.5 text-emerald-400" /> Tested Hardware
+                        </span>
+                      </div>
+
+                      {/* Highlights Snippet */}
+                      {cleanDesc && (
+                        <p className="text-xs sm:text-sm text-slate-300 leading-relaxed line-clamp-2 max-w-xl">
+                          {cleanDesc}
+                        </p>
+                      )}
+
+                      {/* Price & Guarantee Box */}
+                      <div className="pt-1 flex flex-wrap items-baseline gap-3">
+                        <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                          Daily Promo Price:
+                        </div>
+                        <div className="text-2xl sm:text-4xl font-black text-amber-300 font-mono tracking-tight drop-shadow-[0_0_15px_rgba(252,211,77,0.3)]">
+                          GHS {item.price.toFixed(2)}
+                        </div>
+                      </div>
+
+                      {/* Action CTA Buttons */}
+                      <div className="flex flex-wrap items-center gap-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => handleOrderProduct(item)}
+                          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 via-sky-400 to-purple-600 px-6 py-3 text-sm font-black text-black shadow-lg shadow-cyan-500/30 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                        >
+                          <ShoppingBag className="h-4 w-4" /> Order This Deal
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedCategory(category);
+                            setSelectedBrand('All');
+                            const el = document.getElementById('catalog-grid');
+                            el?.scrollIntoView({ behavior: 'smooth' });
+                          }}
+                          className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/80 px-4 py-3 text-xs sm:text-sm font-semibold text-slate-200 hover:border-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer"
+                        >
+                          <Layers className="h-4 w-4" /> Browse In Catalog
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Right Column: Visual Product Showcase (5 cols) */}
+                    <div className="lg:col-span-5 flex items-center justify-center relative">
+                      <div className="relative w-full max-w-sm aspect-[4/3] rounded-2xl border border-slate-800/80 bg-slate-900/60 p-4 flex items-center justify-center overflow-hidden shadow-2xl backdrop-blur-sm group-hover:border-cyan-500/40 transition-colors">
+                        {/* Radial Spotlight Behind Image */}
+                        <div className="absolute inset-0 bg-radial from-cyan-500/10 via-transparent to-transparent opacity-60 pointer-events-none" />
+
+                        {imageUrl ? (
+                          <img
+                            src={imageUrl}
+                            alt={item.title}
+                            className="max-h-56 sm:max-h-64 w-auto object-contain drop-shadow-[0_15px_30px_rgba(0,0,0,0.9)] transform group-hover:scale-105 transition-transform duration-500"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center text-slate-600 space-y-2 py-8">
+                            {isPhone ? (
+                              <Smartphone className="h-20 w-20 text-purple-400/60 stroke-[1.2]" />
+                            ) : isGadget ? (
+                              <HardDrive className="h-20 w-20 text-emerald-400/60 stroke-[1.2]" />
+                            ) : (
+                              <Laptop className="h-20 w-20 text-cyan-400/60 stroke-[1.2]" />
+                            )}
+                            <span className="text-xs font-mono text-slate-400">GKB Verified Stock</span>
+                          </div>
+                        )}
+
+                        {/* Floating Guarantee Badge */}
+                        <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-[10px] font-mono font-semibold px-2.5 py-1.5 rounded-lg bg-slate-950/85 border border-slate-800 backdrop-blur-md text-slate-300">
+                          <span className="flex items-center gap-1 text-cyan-300">
+                            <Shield className="h-3 w-3 text-cyan-400" /> Ghana Warranty
+                          </span>
+                          <span className="text-slate-400">Nationwide Delivery</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Left Arrow Button */}
+          <button
+            type="button"
+            onClick={prevAdSlide}
+            aria-label="Previous Deal"
+            className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-20 h-10 w-10 rounded-full border border-slate-700/80 bg-slate-950/70 hover:bg-slate-900 text-slate-200 hover:text-white flex items-center justify-center backdrop-blur-md shadow-xl hover:scale-110 active:scale-95 transition-all cursor-pointer opacity-80 group-hover:opacity-100"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+
+          {/* Right Arrow Button (Swipe Left trigger) */}
+          <button
+            type="button"
+            onClick={nextAdSlide}
+            aria-label="Next Deal"
+            className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-20 h-10 w-10 rounded-full border border-slate-700/80 bg-slate-950/70 hover:bg-slate-900 text-slate-200 hover:text-white flex items-center justify-center backdrop-blur-md shadow-xl hover:scale-110 active:scale-95 transition-all cursor-pointer opacity-80 group-hover:opacity-100"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+
+          {/* Bottom Pagination Dots / Bars (Jumia Style) */}
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 bg-slate-950/60 px-3 py-1.5 rounded-full border border-slate-800/80 backdrop-blur-md">
+            {advertisedProducts.map((_, dotIdx) => {
+              const isActive = (adSlideIndex % Math.max(1, advertisedProducts.length)) === dotIdx;
+              return (
+                <button
+                  key={dotIdx}
+                  type="button"
+                  onClick={() => setAdSlideIndex(dotIdx)}
+                  aria-label={`Go to slide ${dotIdx + 1}`}
+                  className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
+                    isActive
+                      ? 'w-7 bg-gradient-to-r from-cyan-400 to-purple-400 shadow-[0_0_10px_rgba(6,182,212,0.8)]'
+                      : 'w-2 bg-slate-700/80 hover:bg-slate-500'
+                  }`}
+                />
+              );
+            })}
           </div>
         </section>
 
