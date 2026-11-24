@@ -1951,19 +1951,19 @@ export default function ShoppingPortal() {
         </section>
 
         {/* Category Selector Tabs */}
-        <div id="catalog-grid" className="space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
+        <div id="catalog-grid" className="space-y-3 sm:space-y-4">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1.5 pt-0.5 scrollbar-none sm:flex-wrap">
             <button
               type="button"
               onClick={() => { setSelectedCategory('all'); setSelectedBrand('All'); }}
-              className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${selectedCategory === 'all'
+              className={`shrink-0 inline-flex items-center gap-2 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${selectedCategory === 'all'
                   ? 'gkb-store-tab-active bg-cyan-500 text-slate-950 font-black shadow-md shadow-cyan-500/25 border border-cyan-400'
                   : 'gkb-store-tab-inactive bg-slate-900/80 text-slate-300 border border-slate-800 hover:border-cyan-500/40 hover:text-cyan-300'
                 }`}
             >
-              <Layers className="h-4 w-4" />
+              <Layers className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               <span>All Items</span>
-              <span className="ml-1 text-[11px] font-mono opacity-80">
+              <span className="ml-0.5 text-[10px] sm:text-[11px] font-mono opacity-80">
                 ({inventoryItems.filter(i => isAdmin || i.active).length})
               </span>
             </button>
@@ -1971,14 +1971,17 @@ export default function ShoppingPortal() {
             <button
               type="button"
               onClick={() => { setSelectedCategory('laptops'); setSelectedBrand('All'); }}
-              className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${selectedCategory === 'laptops'
+              className={`shrink-0 inline-flex items-center gap-2 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${selectedCategory === 'laptops'
                   ? 'gkb-store-tab-active bg-cyan-500 text-slate-950 font-black shadow-md shadow-cyan-500/25 border border-cyan-400'
                   : 'gkb-store-tab-inactive bg-slate-900/80 text-slate-300 border border-slate-800 hover:border-cyan-500/40 hover:text-cyan-300'
                 }`}
             >
-              <Laptop className="h-4 w-4" />
-              <span>Laptops & Computers</span>
-              <span className="ml-1 text-[11px] font-mono opacity-80">
+              <Laptop className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span>
+                <span className="sm:hidden">Laptops</span>
+                <span className="hidden sm:inline">Laptops & Computers</span>
+              </span>
+              <span className="ml-0.5 text-[10px] sm:text-[11px] font-mono opacity-80">
                 ({inventoryItems.filter(i => (isAdmin || i.active) && (i.category || parseCategory(i)) === 'laptops').length})
               </span>
             </button>
@@ -1986,14 +1989,17 @@ export default function ShoppingPortal() {
             <button
               type="button"
               onClick={() => { setSelectedCategory('phones'); setSelectedBrand('All'); }}
-              className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${selectedCategory === 'phones'
+              className={`shrink-0 inline-flex items-center gap-2 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${selectedCategory === 'phones'
                   ? 'gkb-store-tab-active bg-cyan-500 text-slate-950 font-black shadow-md shadow-cyan-500/25 border border-cyan-400'
                   : 'gkb-store-tab-inactive bg-slate-900/80 text-slate-300 border border-slate-800 hover:border-cyan-500/40 hover:text-cyan-300'
                 }`}
             >
-              <Smartphone className="h-4 w-4" />
-              <span>Mobile Phones</span>
-              <span className="ml-1 text-[11px] font-mono opacity-80">
+              <Smartphone className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span>
+                <span className="sm:hidden">Phones</span>
+                <span className="hidden sm:inline">Mobile Phones</span>
+              </span>
+              <span className="ml-0.5 text-[10px] sm:text-[11px] font-mono opacity-80">
                 ({inventoryItems.filter(i => (isAdmin || i.active) && (i.category || parseCategory(i)) === 'phones').length})
               </span>
             </button>
@@ -2001,14 +2007,17 @@ export default function ShoppingPortal() {
             <button
               type="button"
               onClick={() => { setSelectedCategory('gadgets'); setSelectedBrand('All'); }}
-              className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${selectedCategory === 'gadgets'
+              className={`shrink-0 inline-flex items-center gap-2 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${selectedCategory === 'gadgets'
                   ? 'gkb-store-tab-active bg-cyan-500 text-slate-950 font-black shadow-md shadow-cyan-500/25 border border-cyan-400'
                   : 'gkb-store-tab-inactive bg-slate-900/80 text-slate-300 border border-slate-800 hover:border-cyan-500/40 hover:text-cyan-300'
                 }`}
             >
-              <HardDrive className="h-4 w-4" />
-              <span>Electronic Gadgets</span>
-              <span className="ml-1 text-[11px] font-mono opacity-80">
+              <HardDrive className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span>
+                <span className="sm:hidden">Gadgets</span>
+                <span className="hidden sm:inline">Electronic Gadgets</span>
+              </span>
+              <span className="ml-0.5 text-[10px] sm:text-[11px] font-mono opacity-80">
                 ({inventoryItems.filter(i => (isAdmin || i.active) && (i.category || parseCategory(i)) === 'gadgets').length})
               </span>
             </button>
@@ -2043,7 +2052,7 @@ export default function ShoppingPortal() {
           )}
 
           {/* Search and Brand Pills */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-6">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 border-b border-slate-800/80 pb-5 sm:pb-6">
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
@@ -2061,44 +2070,41 @@ export default function ShoppingPortal() {
               />
             </div>
 
-            {/* Brand Pills tailored to current category */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-              {/* Brand & Vendor Filters */}
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none flex-wrap sm:flex-nowrap">
-                <Filter className="h-4 w-4 text-cyan-400 shrink-0 hidden sm:block" />
+            {/* Brand & Vendor Filters */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none w-full sm:w-auto">
+              <Filter className="h-4 w-4 text-cyan-400 shrink-0 hidden sm:block" />
 
-                {/* Vendor Dropdown Filter */}
-                {availableVendors.length > 0 && (
-                  <div className="flex items-center gap-1.5 bg-slate-900 border border-purple-500/30 rounded-lg px-2.5 py-1 text-xs shrink-0">
-                    <Store className="h-3.5 w-3.5 text-purple-400 shrink-0" />
-                    <select
-                      value={selectedVendorFilter}
-                      onChange={e => setSelectedVendorFilter(e.target.value)}
-                      className="bg-transparent text-purple-200 font-semibold focus:outline-none cursor-pointer"
-                    >
-                      <option value="all" className="bg-slate-950 text-white">All Sellers ({inventoryItems.length})</option>
-                      <option value="official" className="bg-slate-950 text-white">⚡ GKB Official</option>
-                      {availableVendors.filter(v => !v.toLowerCase().includes('official')).map(v => (
-                        <option key={v} value={v} className="bg-slate-950 text-white">🏪 {v}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {uniqueBrands.map(brand => (
-                  <button
-                    key={brand}
-                    type="button"
-                    onClick={() => setSelectedBrand(brand)}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${selectedBrand === brand
-                        ? 'gkb-subfilter-active bg-cyan-500/20 text-cyan-300 border border-cyan-500/50'
-                        : 'gkb-subfilter-inactive border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-white'
-                      }`}
+              {/* Vendor Dropdown Filter */}
+              {availableVendors.length > 0 && (
+                <div className="flex items-center gap-1.5 bg-slate-900 border border-purple-500/30 rounded-lg px-2.5 py-1 text-xs shrink-0 whitespace-nowrap">
+                  <Store className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                  <select
+                    value={selectedVendorFilter}
+                    onChange={e => setSelectedVendorFilter(e.target.value)}
+                    className="bg-transparent text-purple-200 font-semibold focus:outline-none cursor-pointer"
                   >
-                    {brand}
-                  </button>
-                ))}
-              </div>
+                    <option value="all" className="bg-slate-950 text-white">All Sellers ({inventoryItems.length})</option>
+                    <option value="official" className="bg-slate-950 text-white">⚡ GKB Official</option>
+                    {availableVendors.filter(v => !v.toLowerCase().includes('official')).map(v => (
+                      <option key={v} value={v} className="bg-slate-950 text-white">🏪 {v}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {uniqueBrands.map(brand => (
+                <button
+                  key={brand}
+                  type="button"
+                  onClick={() => setSelectedBrand(brand)}
+                  className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${selectedBrand === brand
+                      ? 'gkb-subfilter-active bg-cyan-500/20 text-cyan-300 border border-cyan-500/50'
+                      : 'gkb-subfilter-inactive border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-white'
+                    }`}
+                >
+                  {brand}
+                </button>
+              ))}
             </div>
           </div>
 
