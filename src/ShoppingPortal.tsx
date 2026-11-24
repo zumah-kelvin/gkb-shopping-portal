@@ -253,6 +253,8 @@ export function cleanHighlights(text: string): string {
   return text
     .replace(/\[\s*Category:[^\]]*\]\s*/gi, '')
     .replace(/\[\s*Vendor:[^\]]*\]\s*/gi, '')
+    .replace(/\[\s*Spec\s*RAM:[^\]]*\]\s*/gi, '')
+    .replace(/\[\s*Spec\s*Storage:[^\]]*\]\s*/gi, '')
     .trim();
 }
 
@@ -667,12 +669,16 @@ export default function ShoppingPortal() {
           const category = parseCategory(item);
           const gadgetType = category === 'gadgets' ? parseGadgetType(item) : undefined;
           const vendor = parseVendor(item);
+          const specRamMatch = item.highlights?.match(/\[Spec\s*RAM:\s*([^\]]+)\]/i);
+          const specStorageMatch = item.highlights?.match(/\[Spec\s*Storage:\s*([^\]]+)\]/i);
           return {
             ...item,
             brand: normalizeBrand(item.brand),
             price: Number(item.price),
             category,
             gadgetType,
+            ram: specRamMatch ? specRamMatch[1].trim() : item.ram,
+            storage: specStorageMatch ? specStorageMatch[1].trim() : item.storage,
             vendorId: vendor.vendorId || item.vendor_id,
             vendorName: vendor.vendorName,
             vendorPhone: vendor.vendorPhone,
@@ -836,55 +842,91 @@ export default function ShoppingPortal() {
           ? '[Vendor: GKB Official Store | Phone: 0552117787]'
           : `[Vendor: ${activeVendorName} | Phone: ${activeVendorPhone}${activeVendorId ? ` | UID: ${activeVendorId}` : ''}]`;
 
-        const enrichedHighlights = `${categoryTag}\n${vendorTag}\n${inventoryHighlights.trim()}`;
-
         // In case database has strict check constraint on ram/storage, provide fallback valid values
-        const dbRam = inventoryCategory === 'gadgets' ? '4GB' : inventoryRam;
-        const dbStorage = inventoryCategory === 'gadgets'
+        const legacyAllowedRam = ['4GB', '8GB', '16GB', '32GB', '64GB'];
+        const legacyAllowedStorage = ['128GB', '256GB', '512GB', '1TB', '2TB', '4TB'];
+
+        const rawSelectedRam = inventoryCategory === 'gadgets' ? 'N/A' : inventoryRam;
+        const rawSelectedStorage = inventoryCategory === 'gadgets'
+          ? (inventoryGadgetCapacity !== 'None / N/A' ? inventoryGadgetCapacity : 'N/A')
+          : inventoryStorage;
+
+        // Metadata tags to guarantee true requested specs are stored and displayed accurately
+        const specTags = `[Spec RAM: ${rawSelectedRam}][Spec Storage: ${rawSelectedStorage}]`;
+        const enrichedHighlights = `${categoryTag}\n${vendorTag}\n${specTags}\n${inventoryHighlights.trim()}`;
+
+        const preferredRam = inventoryCategory === 'gadgets' ? '4GB' : inventoryRam;
+        const preferredStorage = inventoryCategory === 'gadgets'
           ? (inventoryGadgetCapacity.includes('GB') || inventoryGadgetCapacity.includes('TB') ? inventoryGadgetCapacity : '128GB')
           : inventoryStorage;
 
-        const payload: Record<string, any> = {
-          brand: effectiveBrand,
-          title: inventoryTitle.trim(),
-          highlights: enrichedHighlights,
-          price,
-          ram: dbRam,
-          storage: dbStorage,
-          image_path: path
-        };
+        const safeFallbackRam = legacyAllowedRam.includes(preferredRam) ? preferredRam : '8GB';
+        const safeFallbackStorage = legacyAllowedStorage.includes(preferredStorage) ? preferredStorage : '128GB';
 
-        // Try inserting with native vendor and category columns
-        let result = await relaySupabase
-          .from('gkb_inventory_items')
-          .insert({
-            ...payload,
-            category: inventoryCategory,
-            vendor_id: activeVendorId,
-            vendor_name: activeVendorName,
-            vendor_phone: activeVendorPhone
-          })
-          .select()
-          .single();
+        // Prepare insertion attempts: first with preferred, then with safe fallback if check constraint fires
+        const ramCandidates = preferredRam === safeFallbackRam ? [preferredRam] : [preferredRam, safeFallbackRam];
+        const storageCandidates = preferredStorage === safeFallbackStorage ? [preferredStorage] : [preferredStorage, safeFallbackStorage];
 
-        // Graceful fallbacks if vendor or category columns don't exist yet in Supabase
-        if (result.error) {
-          result = await relaySupabase
-            .from('gkb_inventory_items')
-            .insert({ ...payload, category: inventoryCategory })
-            .select()
-            .single();
+        let result: any = null;
+        let lastError: any = null;
 
-          if (result.error) {
+        for (const testRam of ramCandidates) {
+          for (const testStorage of storageCandidates) {
+            const basePayload = {
+              brand: effectiveBrand,
+              title: inventoryTitle.trim(),
+              highlights: enrichedHighlights,
+              price,
+              ram: testRam,
+              storage: testStorage,
+              image_path: path
+            };
+
+            // Attempt 1: with all modern columns (category, vendor_id, vendor_name, vendor_phone)
             result = await relaySupabase
               .from('gkb_inventory_items')
-              .insert(payload)
+              .insert({
+                ...basePayload,
+                category: inventoryCategory,
+                vendor_id: activeVendorId,
+                vendor_name: activeVendorName,
+                vendor_phone: activeVendorPhone
+              })
               .select()
               .single();
+
+            if (!result.error) break;
+
+            // Attempt 2: with only category column
+            result = await relaySupabase
+              .from('gkb_inventory_items')
+              .insert({
+                ...basePayload,
+                category: inventoryCategory
+              })
+              .select()
+              .single();
+
+            if (!result.error) break;
+
+            // Attempt 3: base legacy schema only
+            result = await relaySupabase
+              .from('gkb_inventory_items')
+              .insert(basePayload)
+              .select()
+              .single();
+
+            if (!result.error) break;
+
+            lastError = result.error;
           }
+          if (result && !result.error) break;
         }
 
-        if (result.error) throw result.error;
+        if (result?.error || !result?.data) {
+          throw lastError || result?.error || new Error('Database insert failed.');
+        }
+
         const data = result.data;
 
         const newItem: InventoryItem = {
@@ -893,8 +935,8 @@ export default function ShoppingPortal() {
           price: Number(data.price),
           category: inventoryCategory,
           gadgetType: inventoryCategory === 'gadgets' ? inventoryGadgetType : undefined,
-          storage: inventoryCategory === 'gadgets' && inventoryGadgetCapacity !== 'None / N/A' ? inventoryGadgetCapacity : data.storage,
-          ram: inventoryCategory === 'gadgets' ? 'N/A' : data.ram,
+          storage: rawSelectedStorage,
+          ram: rawSelectedRam,
           vendorId: activeVendorId || data.vendor_id,
           vendorName: activeVendorName,
           vendorPhone: activeVendorPhone,
@@ -908,8 +950,16 @@ export default function ShoppingPortal() {
         setInventoryCustomBrand('');
         setInventoryImage(null);
         setInventoryMessage(`${categoryLabel} published to live storefront under "${activeVendorName}" successfully!`);
-      } catch (error) {
-        setInventoryError(error instanceof Error ? error.message : 'Failed to add product.');
+      } catch (error: unknown) {
+        console.error('Failed to add product:', error);
+        let msg = 'Failed to add product.';
+        if (error instanceof Error) {
+          msg = error.message;
+        } else if (typeof error === 'object' && error !== null) {
+          const errObj = error as Record<string, any>;
+          msg = errObj.message || errObj.error_description || errObj.details || JSON.stringify(error);
+        }
+        setInventoryError(`Could not publish product: ${msg}`);
       } finally {
         setInventoryBusy(false);
       }
@@ -1058,7 +1108,7 @@ export default function ShoppingPortal() {
 
           // 1. Detect Category
           let detectedCategory: ProductCategory = 'laptops';
-          const isPhone = /\b(iphone|galaxy\s*[as]\d|redmi|infinix|tecno|pixel|huawei|oppo|vivo|oneplus|dual\s*sim|battery\s*health|ios)\b/i.test(fullLower);
+          const isPhone = /\b(iphone|\d{1,2}\s*(?:pro\s*max|promax|pro|plus|mini)|pro\s*max|promax|esim|glacier|galaxy\s*[as]\d|redmi|infinix|tecno|pixel|huawei|oppo|vivo|oneplus|dual\s*sim|battery\s*health|bh\s*\d{2}%?|face\s*id|ios|factory\s*unlocked|jv\s*locked|sim\s*locked)\b|/i.test(fullLower);
           const isGadget = /\b(external\s*hard\s*drive|power\s*bank|portable\s*charger|cooling\s*pad|docking\s*station|wireless\s*mouse|wireless\s*keyboard|bluetooth\s*speaker|earbuds|headphones|smart\s*iot|smart\s*relay)\b/i.test(fullLower);
           const isLaptop = /\b(laptop|notebook|ultrabook|precision|thinkpad|elitebook|latitude|probook|macbook|x360|convertible|intel|core\s*i[3579]|ryzen|ddr[345]|touchscreen|fhd|ips|workstation)\b/i.test(fullLower);
 
@@ -1079,7 +1129,7 @@ export default function ShoppingPortal() {
             { brand: 'HP', test: /\b(hp|hewlett|elitebook|probook|omen|pavilion|spectre|envy)\b/i, category: 'laptops' },
             { brand: 'Lenovo', test: /\b(lenovo|thinkpad|ideapad|legion|yoga)\b/i, category: 'laptops' },
             { brand: 'Apple', test: /\b(macbook|imac|mac\s*mini|apple\s*silicon|m[1234])\b/i, category: 'laptops' },
-            { brand: 'Apple (iPhone)', test: /\b(iphone|apple)\b/i, category: 'phones' },
+            { brand: 'Apple (iPhone)', test: /\b(iphone|apple|\d{1,2}\s*(?:pro\s*max|promax|pro|plus|mini)|pro\s*max|promax|ios|bionic|esim)\b|/i, category: 'phones' },
             { brand: 'Samsung', test: /\b(samsung|galaxy)\b/i },
             { brand: 'Asus', test: /\b(asus|zenbook|vivobook|rog|tuf)\b/i, category: 'laptops' },
             { brand: 'Acer', test: /\b(acer|aspire|predator|nitro|swift)\b/i, category: 'laptops' },
@@ -1110,9 +1160,11 @@ export default function ShoppingPortal() {
           let detectedPrice = '';
           let priceLineIndex = -1;
 
-          // Bottom-up search for standalone or formatted numbers
+          // Bottom-up search for standalone or formatted numbers (stripping emojis like ‼️)
           for (let i = rawLines.length - 1; i >= 0; i--) {
-            const lineClean = cleanLine(rawLines[i]);
+            const lineClean = cleanLine(rawLines[i])
+              .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}‼️!🔥💰✅🖊️💡❤️]/gu, '')
+              .trim();
             const priceMatch = lineClean.match(/^(?:(?:ghs|gh₵|gh|cedis|price|¢)[:\s]*)?([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{3,6})(?:\.00|\/-)?(?:\s*(?:ghs|gh₵|gh|cedis|¢))?$/i);
             if (priceMatch) {
               const val = priceMatch[1].replace(/,/g, '');
@@ -1125,7 +1177,7 @@ export default function ShoppingPortal() {
             }
           }
 
-          // Fallback search anywhere in text for "GHS 4490" etc.
+          // Fallback search anywhere in text for "GHS 4490" or "12800" etc.
           if (!detectedPrice) {
             const labeledMatch = fullLower.match(/(?:ghs|gh₵|gh|cedis|price|¢)[:\s]*([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{3,6})/i);
             if (labeledMatch) {
@@ -1145,6 +1197,8 @@ export default function ShoppingPortal() {
               const match = phoneRamOptions.find(o => o.startsWith(`${ramNum}GB`));
               detectedRam = match || `${ramNum}GB`;
             }
+          } else if (detectedCategory === 'phones') {
+            detectedRam = '6GB';
           }
 
           // 5. Detect Storage
@@ -1161,19 +1215,42 @@ export default function ShoppingPortal() {
             }
           }
 
-          // 6. Detect Title / Model (First non-empty line that isn't just the price)
+          // 6. Detect Title / Model (Filter out condition / marketing slogans)
+          const conditionPatterns = /^(new\s*and\s*sealed|brand\s*new|sealed(\s*in\s*box)?|in\s*box|clean\s*used|uk\s*used|foreign\s*used|neat|condition\s*[:\d\/]+|hot\s*deal|best\s*price|promo|available\s*(now)?|fresh|clean\s*machine)$/i;
+
           let candidateTitle = '';
           for (let i = 0; i < rawLines.length; i++) {
             if (i === priceLineIndex) continue;
             const l = cleanLine(rawLines[i]);
+            if (conditionPatterns.test(l)) continue;
             if (l.length >= 3 && !/^\d+$/.test(l)) {
               candidateTitle = l;
               break;
             }
           }
+          if (!candidateTitle) {
+            for (let i = 0; i < rawLines.length; i++) {
+              if (i === priceLineIndex) continue;
+              const l = cleanLine(rawLines[i]);
+              if (l.length >= 3 && !/^\d+$/.test(l)) {
+                candidateTitle = l;
+                break;
+              }
+            }
+          }
+
+          // For iPhone models, strip storage duplicate and auto-format (e.g. "18 pro max 256gb" -> "iPhone 18 Pro Max")
+          if (detectedCategory === 'phones' && (detectedBrand.includes('Apple') || isPhone)) {
+            candidateTitle = candidateTitle.replace(/\b(64|128|256|512)\s*(?:gb|g)\b/i, '').trim();
+            if (/^\d{1,2}\s*(?:pro|plus|mini|promax)/i.test(candidateTitle)) {
+              candidateTitle = 'iPhone ' + candidateTitle;
+            }
+          }
 
           const formatTitleWord = (w: string) => {
             const wl = w.toLowerCase();
+            if (wl === 'iphone') return 'iPhone';
+            if (wl === 'ipad') return 'iPad';
             if (/^(i[3579]|ssd|hdd|ram|fhd|uhd|oled|ips|4k|2k|x360|m[1234]|ddr[345]|gb|tb)$/i.test(wl)) return w.toUpperCase();
             if (/^\d+[a-z]?$/i.test(wl)) return w.toUpperCase();
             return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
