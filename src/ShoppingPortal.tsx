@@ -1698,19 +1698,19 @@ export default function ShoppingPortal() {
         {/* ================= JUMIA-STYLE DAILY ADVERTISING BANNER CAROUSEL ================= */}
         <section
           aria-label="Daily Featured Tech Advertisements"
-          className="relative overflow-hidden rounded-3xl border border-cyan-500/30 bg-slate-950 shadow-2xl group select-none"
+          className="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-cyan-500/30 bg-slate-950 shadow-2xl group select-none"
           onMouseEnter={() => setIsAdPaused(true)}
           onMouseLeave={() => setIsAdPaused(false)}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
-          {/* Subtle Top Control Strip: Deal Counter & Daily Status */}
-          <div className="absolute top-3.5 left-4 right-4 z-20 flex items-center justify-between pointer-events-none">
-            <div className="flex items-center gap-2 pointer-events-auto">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-slate-950/80 px-3 py-1 text-[11px] font-bold font-mono tracking-wider text-amber-300 shadow-sm backdrop-blur-md">
-                <Flame className="h-3.5 w-3.5 text-amber-400 animate-pulse" />
-                DAILY FEATURED DEALS
+          {/* Top Control Strip */}
+          <div className="absolute top-2 sm:top-3.5 left-3 sm:left-4 right-3 sm:right-4 z-20 flex items-center justify-between pointer-events-none">
+            <div className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto">
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-slate-950/85 px-2 sm:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[11px] font-bold font-mono tracking-wider text-amber-300 shadow-sm backdrop-blur-md">
+                <Flame className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5 text-amber-400 animate-pulse" />
+                DAILY DEALS
               </span>
               <span className="hidden sm:inline-flex items-center gap-1 rounded-full border border-cyan-500/30 bg-slate-950/70 px-2.5 py-1 text-[10px] font-mono text-cyan-300 backdrop-blur-md">
                 <Sparkles className="h-3 w-3 text-cyan-400" />
@@ -1718,17 +1718,17 @@ export default function ShoppingPortal() {
               </span>
             </div>
 
-            <div className="flex items-center gap-2 pointer-events-auto">
-              <span className="rounded-full border border-slate-700/80 bg-slate-950/80 px-2.5 py-1 text-[10px] font-mono font-bold text-slate-300 backdrop-blur-md">
+            <div className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto">
+              <span className="rounded-full border border-slate-700/80 bg-slate-950/85 px-2 sm:px-2.5 py-0.5 sm:py-1 text-[9px] sm:text-[10px] font-mono font-bold text-slate-300 backdrop-blur-md">
                 Deal {((adSlideIndex % Math.max(1, advertisedProducts.length)) + 1)} of {advertisedProducts.length}
               </span>
               <button
                 type="button"
                 onClick={() => setIsAdPaused(p => !p)}
-                className="p-1.5 rounded-full border border-slate-700/80 bg-slate-950/80 hover:bg-slate-900 text-slate-300 transition-colors backdrop-blur-md cursor-pointer"
+                className="p-1 sm:p-1.5 rounded-full border border-slate-700/80 bg-slate-950/85 hover:bg-slate-900 text-slate-300 transition-colors backdrop-blur-md cursor-pointer"
                 title={isAdPaused ? 'Resume auto-slides' : 'Pause auto-slides'}
               >
-                {isAdPaused ? <Play className="h-3 w-3 text-emerald-400" /> : <Pause className="h-3 w-3 text-slate-400" />}
+                {isAdPaused ? <Play className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-emerald-400" /> : <Pause className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-slate-400" />}
               </button>
             </div>
           </div>
@@ -1752,104 +1752,106 @@ export default function ShoppingPortal() {
 
               // Category-based background theme
               const bgGradient = isPhone
-                ? 'from-slate-950 via-purple-950/50 to-slate-950'
+                ? 'from-slate-950 via-purple-950/45 to-slate-900'
                 : isGadget
-                  ? 'from-slate-950 via-emerald-950/40 to-slate-950'
-                  : 'from-slate-950 via-cyan-950/40 to-slate-900';
+                  ? 'from-slate-950 via-emerald-950/35 to-slate-900'
+                  : 'from-slate-950 via-cyan-950/35 to-slate-900';
 
               const glowColor = isPhone ? 'bg-purple-600/15' : isGadget ? 'bg-emerald-600/15' : 'bg-cyan-600/15';
 
               return (
                 <div
                   key={`${item.id}-${index}`}
-                  className={`w-full flex-shrink-0 min-w-full relative overflow-hidden bg-gradient-to-r ${bgGradient} px-6 sm:px-12 pt-14 pb-14 sm:pb-16`}
+                  className={`w-full flex-shrink-0 min-w-full relative overflow-hidden bg-gradient-to-r ${bgGradient} px-3.5 sm:px-12 pt-9 pb-8 sm:pt-14 sm:pb-14`}
                 >
                   {/* Category Ambient Glow Orbs */}
-                  <div className={`absolute top-0 right-1/4 w-96 h-96 ${glowColor} rounded-full blur-[100px] pointer-events-none`} />
-                  <div className="absolute bottom-0 left-10 w-72 h-72 bg-purple-600/10 rounded-full blur-[80px] pointer-events-none" />
+                  <div className={`absolute top-0 right-1/4 w-72 sm:w-96 h-72 sm:h-96 ${glowColor} rounded-full blur-[80px] sm:blur-[100px] pointer-events-none`} />
+                  <div className="absolute bottom-0 left-5 w-48 sm:w-72 h-48 sm:h-72 bg-purple-600/10 rounded-full blur-[60px] sm:blur-[80px] pointer-events-none" />
 
-                  <div className="relative z-10 grid gap-8 lg:grid-cols-12 lg:items-center">
-                    {/* Left Column: Product Info & Actions (7 cols) */}
-                    <div className="space-y-4 lg:col-span-7">
-                      <div className="flex flex-wrap items-center gap-2">
+                  {/* Horizontal Side-by-Side Flex on Mobile, 12-col Grid on Desktop */}
+                  <div className="relative z-10 flex items-center justify-between gap-3 sm:grid sm:grid-cols-12 sm:gap-8">
+                    {/* Left Info Column */}
+                    <div className="flex-1 min-w-0 space-y-1.5 sm:space-y-4 sm:col-span-7">
+                      {/* Badge row */}
+                      <div className="flex flex-wrap items-center gap-1 sm:gap-2">
                         {/* Category Tag */}
-                        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold font-mono tracking-wider uppercase border shadow-sm ${
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 sm:px-3 py-0.5 sm:py-1 text-[9px] sm:text-xs font-bold font-mono tracking-wider uppercase border shadow-sm ${
                           isPhone
                             ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
                             : isGadget
                               ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                               : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
                         }`}>
-                          {isPhone ? <Smartphone className="h-3.5 w-3.5" /> : isGadget ? <HardDrive className="h-3.5 w-3.5" /> : <Laptop className="h-3.5 w-3.5" />}
-                          {isPhone ? 'Smartphone Deal' : isGadget ? 'Electronic Gadget' : 'High-Performance Laptop'}
+                          {isPhone ? <Smartphone className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5" /> : isGadget ? <HardDrive className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5" /> : <Laptop className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5" />}
+                          <span>{isPhone ? 'Phone' : isGadget ? 'Gadget' : 'Laptop'}</span>
                         </span>
 
                         {/* Brand Pill */}
-                        <span className="rounded-full border border-slate-700 bg-slate-900/90 px-2.5 py-1 text-xs font-bold text-slate-200">
+                        <span className="rounded-full border border-slate-700 bg-slate-900/90 px-1.5 sm:px-2.5 py-0.5 sm:py-1 text-[9px] sm:text-xs font-bold text-slate-200">
                           {normalizeBrand(item.brand)}
                         </span>
 
                         {/* Vendor attribution badge */}
                         {item.isOfficial ? (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-bold text-cyan-300">
-                            <BadgeCheck className="h-3 w-3 text-cyan-400" /> GKB Official
+                          <span className="hidden xs:inline-flex sm:inline-flex items-center gap-1 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 sm:px-2.5 sm:py-1 text-[8px] sm:text-[11px] font-bold text-cyan-300">
+                            <BadgeCheck className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-cyan-400" /> GKB Official
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-bold text-amber-300">
-                            <Store className="h-3 w-3 text-amber-400" /> {item.vendorName || 'Verified Vendor'}
+                          <span className="hidden xs:inline-flex sm:inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 sm:px-2.5 sm:py-1 text-[8px] sm:text-[11px] font-bold text-amber-300">
+                            <Store className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-amber-400" />
+                            <span className="max-w-[70px] sm:max-w-none truncate">{item.vendorName || 'Vendor'}</span>
                           </span>
                         )}
                       </div>
 
                       {/* Product Title */}
-                      <div>
-                        <h2 className="text-2xl sm:text-4xl font-black tracking-tight text-white leading-tight line-clamp-2">
-                          {item.title}
-                        </h2>
-                      </div>
+                      <h2 className="text-sm xs:text-base sm:text-3xl lg:text-4xl font-black tracking-tight text-white leading-tight line-clamp-2">
+                        {item.title}
+                      </h2>
 
-                      {/* Specs Row */}
-                      <div className="flex flex-wrap items-center gap-2 text-xs font-medium">
+                      {/* Spec Pills Row */}
+                      <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-[9px] sm:text-xs font-medium">
                         {isLaptop && item.ram && item.ram !== 'N/A' && (
-                          <span className="inline-flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-900/90 px-2.5 py-1.5 text-cyan-300 font-mono">
-                            <Cpu className="h-3.5 w-3.5 text-cyan-400" /> {item.ram} RAM
+                          <span className="inline-flex items-center gap-1 rounded-md border border-slate-800 bg-slate-900/90 px-1.5 sm:px-2.5 py-0.5 sm:py-1.5 text-cyan-300 font-mono">
+                            <Cpu className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5 text-cyan-400" /> {item.ram}
                           </span>
                         )}
                         {item.storage && item.storage !== 'None' && item.storage !== 'N/A' && (
-                          <span className="inline-flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-900/90 px-2.5 py-1.5 text-purple-300 font-mono">
-                            <HardDrive className="h-3.5 w-3.5 text-purple-400" /> {item.storage}
+                          <span className="inline-flex items-center gap-1 rounded-md border border-slate-800 bg-slate-900/90 px-1.5 sm:px-2.5 py-0.5 sm:py-1.5 text-purple-300 font-mono">
+                            <HardDrive className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5 text-purple-400" /> {item.storage}
                           </span>
                         )}
-                        <span className="inline-flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-900/90 px-2.5 py-1.5 text-emerald-300 font-mono">
-                          <CheckCircle className="h-3.5 w-3.5 text-emerald-400" /> Tested Hardware
+                        <span className="inline-flex items-center gap-1 rounded-md border border-slate-800 bg-slate-900/90 px-1.5 sm:px-2.5 py-0.5 sm:py-1.5 text-emerald-300 font-mono">
+                          <CheckCircle className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5 text-emerald-400" /> Verified
                         </span>
                       </div>
 
-                      {/* Highlights Snippet */}
+                      {/* Snippet on desktop only */}
                       {cleanDesc && (
-                        <p className="text-xs sm:text-sm text-slate-300 leading-relaxed line-clamp-2 max-w-xl">
+                        <p className="hidden sm:block text-xs sm:text-sm text-slate-300 leading-relaxed line-clamp-2 max-w-xl">
                           {cleanDesc}
                         </p>
                       )}
 
-                      {/* Price & Guarantee Box */}
-                      <div className="pt-1 flex flex-wrap items-baseline gap-3">
-                        <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                          Daily Promo Price:
-                        </div>
-                        <div className="text-2xl sm:text-4xl font-black text-amber-300 font-mono tracking-tight drop-shadow-[0_0_15px_rgba(252,211,77,0.3)]">
+                      {/* Price Tag */}
+                      <div className="pt-0.5 sm:pt-1 flex items-baseline gap-1.5 sm:gap-3">
+                        <span className="text-[9px] sm:text-xs font-bold uppercase tracking-wider text-slate-400">
+                          Price:
+                        </span>
+                        <span className="text-base xs:text-lg sm:text-3xl font-black text-amber-300 font-mono tracking-tight drop-shadow-[0_0_15px_rgba(252,211,77,0.3)]">
                           GHS {item.price.toFixed(2)}
-                        </div>
+                        </span>
                       </div>
 
-                      {/* Action CTA Buttons */}
-                      <div className="flex flex-wrap items-center gap-3 pt-2">
+                      {/* CTA Buttons */}
+                      <div className="flex items-center gap-2 pt-1 sm:pt-2">
                         <button
                           type="button"
                           onClick={() => handleOrderProduct(item)}
-                          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 via-sky-400 to-purple-600 px-6 py-3 text-sm font-black text-black shadow-lg shadow-cyan-500/30 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                          className="inline-flex items-center gap-1.5 rounded-lg sm:rounded-xl bg-gradient-to-r from-cyan-500 via-sky-400 to-purple-600 px-3 sm:px-6 py-1.5 sm:py-3 text-[11px] sm:text-sm font-black text-black shadow-md shadow-cyan-500/30 hover:scale-105 active:scale-95 transition-all cursor-pointer whitespace-nowrap"
                         >
-                          <ShoppingBag className="h-4 w-4" /> Order This Deal
+                          <ShoppingBag className="h-3 w-3 sm:h-4 sm:w-4" />
+                          <span>Order This Deal</span>
                         </button>
                         <button
                           type="button"
@@ -1859,16 +1861,16 @@ export default function ShoppingPortal() {
                             const el = document.getElementById('catalog-grid');
                             el?.scrollIntoView({ behavior: 'smooth' });
                           }}
-                          className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/80 px-4 py-3 text-xs sm:text-sm font-semibold text-slate-200 hover:border-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer"
+                          className="hidden sm:inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/80 px-4 py-3 text-xs sm:text-sm font-semibold text-slate-200 hover:border-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer"
                         >
                           <Layers className="h-4 w-4" /> Browse In Catalog
                         </button>
                       </div>
                     </div>
 
-                    {/* Right Column: Visual Product Showcase (5 cols) */}
-                    <div className="lg:col-span-5 flex items-center justify-center relative">
-                      <div className="relative w-full max-w-sm aspect-[4/3] rounded-2xl border border-slate-800/80 bg-slate-900/60 p-4 flex items-center justify-center overflow-hidden shadow-2xl backdrop-blur-sm group-hover:border-cyan-500/40 transition-colors">
+                    {/* Right Product Image Column (Prominent beside text on mobile!) */}
+                    <div className="w-28 xs:w-36 sm:w-auto sm:col-span-5 shrink-0 flex items-center justify-center relative">
+                      <div className="relative w-full aspect-square max-w-[125px] xs:max-w-[150px] sm:max-w-sm rounded-xl sm:rounded-2xl border border-slate-800/80 bg-slate-900/60 p-1.5 sm:p-4 flex items-center justify-center overflow-hidden shadow-xl backdrop-blur-sm group-hover:border-cyan-500/40 transition-colors">
                         {/* Radial Spotlight Behind Image */}
                         <div className="absolute inset-0 bg-radial from-cyan-500/10 via-transparent to-transparent opacity-60 pointer-events-none" />
 
@@ -1876,28 +1878,28 @@ export default function ShoppingPortal() {
                           <img
                             src={imageUrl}
                             alt={item.title}
-                            className="max-h-56 sm:max-h-64 w-auto object-contain drop-shadow-[0_15px_30px_rgba(0,0,0,0.9)] transform group-hover:scale-105 transition-transform duration-500"
+                            className="h-full w-full object-contain drop-shadow-[0_10px_25px_rgba(0,0,0,0.9)] transform group-hover:scale-105 transition-transform duration-500"
                             loading="lazy"
                           />
                         ) : (
-                          <div className="flex flex-col items-center justify-center text-slate-600 space-y-2 py-8">
+                          <div className="flex flex-col items-center justify-center text-slate-600 space-y-1 py-4">
                             {isPhone ? (
-                              <Smartphone className="h-20 w-20 text-purple-400/60 stroke-[1.2]" />
+                              <Smartphone className="h-10 w-10 sm:h-20 sm:w-20 text-purple-400/60 stroke-[1.2]" />
                             ) : isGadget ? (
-                              <HardDrive className="h-20 w-20 text-emerald-400/60 stroke-[1.2]" />
+                              <HardDrive className="h-10 w-10 sm:h-20 sm:w-20 text-emerald-400/60 stroke-[1.2]" />
                             ) : (
-                              <Laptop className="h-20 w-20 text-cyan-400/60 stroke-[1.2]" />
+                              <Laptop className="h-10 w-10 sm:h-20 sm:w-20 text-cyan-400/60 stroke-[1.2]" />
                             )}
-                            <span className="text-xs font-mono text-slate-400">GKB Verified Stock</span>
+                            <span className="text-[8px] sm:text-xs font-mono text-slate-400">Verified</span>
                           </div>
                         )}
 
-                        {/* Floating Guarantee Badge */}
-                        <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-[10px] font-mono font-semibold px-2.5 py-1.5 rounded-lg bg-slate-950/85 border border-slate-800 backdrop-blur-md text-slate-300">
+                        {/* Floating Guarantee Badge (desktop / tablet) */}
+                        <div className="hidden sm:flex absolute bottom-3 left-3 right-3 items-center justify-between text-[10px] font-mono font-semibold px-2.5 py-1.5 rounded-lg bg-slate-950/85 border border-slate-800 backdrop-blur-md text-slate-300">
                           <span className="flex items-center gap-1 text-cyan-300">
                             <Shield className="h-3 w-3 text-cyan-400" /> Ghana Warranty
                           </span>
-                          <span className="text-slate-400">Nationwide Delivery</span>
+                          <span className="text-slate-400">Nationwide</span>
                         </div>
                       </div>
                     </div>
@@ -1907,28 +1909,28 @@ export default function ShoppingPortal() {
             })}
           </div>
 
-          {/* Left Arrow Button */}
+          {/* Left Arrow Button (Desktop Only: hidden on mobile so it never clashes with content or buttons) */}
           <button
             type="button"
             onClick={prevAdSlide}
             aria-label="Previous Deal"
-            className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-20 h-10 w-10 rounded-full border border-slate-700/80 bg-slate-950/70 hover:bg-slate-900 text-slate-200 hover:text-white flex items-center justify-center backdrop-blur-md shadow-xl hover:scale-110 active:scale-95 transition-all cursor-pointer opacity-80 group-hover:opacity-100"
+            className="hidden sm:flex absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-20 h-10 w-10 rounded-full border border-slate-700/80 bg-slate-950/70 hover:bg-slate-900 text-slate-200 hover:text-white items-center justify-center backdrop-blur-md shadow-xl hover:scale-110 active:scale-95 transition-all cursor-pointer opacity-80 group-hover:opacity-100"
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
 
-          {/* Right Arrow Button (Swipe Left trigger) */}
+          {/* Right Arrow Button (Desktop Only: hidden on mobile) */}
           <button
             type="button"
             onClick={nextAdSlide}
             aria-label="Next Deal"
-            className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-20 h-10 w-10 rounded-full border border-slate-700/80 bg-slate-950/70 hover:bg-slate-900 text-slate-200 hover:text-white flex items-center justify-center backdrop-blur-md shadow-xl hover:scale-110 active:scale-95 transition-all cursor-pointer opacity-80 group-hover:opacity-100"
+            className="hidden sm:flex absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-20 h-10 w-10 rounded-full border border-slate-700/80 bg-slate-950/70 hover:bg-slate-900 text-slate-200 hover:text-white items-center justify-center backdrop-blur-md shadow-xl hover:scale-110 active:scale-95 transition-all cursor-pointer opacity-80 group-hover:opacity-100"
           >
             <ChevronRight className="h-5 w-5" />
           </button>
 
           {/* Bottom Pagination Dots / Bars (Jumia Style) */}
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 bg-slate-950/60 px-3 py-1.5 rounded-full border border-slate-800/80 backdrop-blur-md">
+          <div className="absolute bottom-1.5 sm:bottom-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 sm:gap-1.5 bg-slate-950/70 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full border border-slate-800/80 backdrop-blur-md">
             {advertisedProducts.map((_, dotIdx) => {
               const isActive = (adSlideIndex % Math.max(1, advertisedProducts.length)) === dotIdx;
               return (
@@ -1937,10 +1939,10 @@ export default function ShoppingPortal() {
                   type="button"
                   onClick={() => setAdSlideIndex(dotIdx)}
                   aria-label={`Go to slide ${dotIdx + 1}`}
-                  className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
+                  className={`h-1.5 sm:h-2 rounded-full transition-all duration-300 cursor-pointer ${
                     isActive
-                      ? 'w-7 bg-gradient-to-r from-cyan-400 to-purple-400 shadow-[0_0_10px_rgba(6,182,212,0.8)]'
-                      : 'w-2 bg-slate-700/80 hover:bg-slate-500'
+                      ? 'w-5 sm:w-7 bg-gradient-to-r from-cyan-400 to-purple-400 shadow-[0_0_10px_rgba(6,182,212,0.8)]'
+                      : 'w-1.5 sm:w-2 bg-slate-700/80 hover:bg-slate-500'
                   }`}
                 />
               );
