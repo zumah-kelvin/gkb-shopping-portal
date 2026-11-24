@@ -9,7 +9,7 @@ import {
   Smartphone, HardDrive, Layers, Cpu, Copy, Check, Info,
   SlidersHorizontal, Sparkles, Folder, Pencil, DollarSign, X,
   Store, BadgeCheck, Building, Trash2, ChevronLeft, ChevronRight,
-  Flame, Pause, Play
+  Flame, Pause, Play, MessageCircle, Share2
 } from 'lucide-react';
 
 export type ProductCategory = 'laptops' | 'phones' | 'gadgets';
@@ -527,6 +527,48 @@ export default function ShoppingPortal() {
   const [deletingProduct, setDeletingProduct] = useState<InventoryItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+
+  // WhatsApp Status Ad Modal state
+  const [whatsAppAdProduct, setWhatsAppAdProduct] = useState<InventoryItem | null>(null);
+  const [adCopied, setAdCopied] = useState(false);
+
+  const generateWhatsAppAdCaption = (item: InventoryItem) => {
+    const category = item.category || parseCategory(item);
+    const isPhone = category === 'phones';
+    const isGadget = category === 'gadgets';
+    const categoryLabel = isPhone ? 'SMARTPHONE' : isGadget ? 'ELECTRONIC GADGET' : 'LAPTOP';
+    const icon = isPhone ? '📱' : isGadget ? '⚡' : '💻';
+
+    const ramPart = (!isPhone && item.ram && item.ram !== 'N/A') ? `${item.ram} RAM · ` : '';
+    const storagePart = (item.storage && item.storage !== 'None' && item.storage !== 'N/A') ? item.storage : '';
+    const specs = `${ramPart}${storagePart}`.trim();
+
+    const price = item.price.toLocaleString(undefined, { minimumFractionDigits: 2 });
+    const cleanDesc = cleanHighlights(item.highlights);
+
+    const lines = [
+      `🔥 *GKB FEATURED ${categoryLabel} DEAL* 🔥`,
+      '━━━━━━━━━━━━━━━━━━━━━━',
+      `${icon} *${normalizeBrand(item.brand)} ${item.title}*`,
+    ];
+
+    if (specs) {
+      lines.push(`⚡ *Specs:* ${specs}`);
+    }
+    lines.push(`💰 *Price:* GHS ${price}`);
+
+    if (cleanDesc) {
+      lines.push(`✨ ${cleanDesc.slice(0, 180)}`);
+    }
+
+    lines.push('');
+    lines.push('🛒 *Order Online:* https://gkb-shoping.netlify.app/');
+    lines.push('📞 *Call / WhatsApp:* 0552117787 (Zumah Kelvin)');
+    lines.push('🚚 *Nationwide Ghana Delivery · MoMo Verified*');
+    lines.push('⚡ *GKB Technologies • Built Beyond Limits*');
+
+    return lines.join('\n');
+  };
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -3009,7 +3051,19 @@ WiFi
                                       )}
                                     </div>
 
-                                    <div className="flex items-center gap-2 shrink-0">
+                                    <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setWhatsAppAdProduct(item);
+                                          setAdCopied(false);
+                                        }}
+                                        className="text-xs px-3 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
+                                        title="Create and share WhatsApp Status advert"
+                                      >
+                                        <MessageCircle className="h-3.5 w-3.5 text-emerald-400" />
+                                        WhatsApp Ad
+                                      </button>
                                       {canEdit && !isEditingThisPrice && (
                                         <button
                                           type="button"
@@ -3379,6 +3433,115 @@ WiFi
                         >
                           {isDeleting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                           {isDeleting ? 'Deleting Permanently…' : 'Yes, Delete Permanently'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* WhatsApp Status Advert Generator Modal */}
+                {whatsAppAdProduct && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
+                    <div className="relative w-full max-w-lg rounded-2xl border border-emerald-500/40 bg-slate-950 p-5 sm:p-6 text-white shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <div className="flex items-center gap-2 text-emerald-400">
+                          <div className="p-2 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                            <MessageCircle className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <h3 className="text-base font-bold text-white">WhatsApp Status Advert</h3>
+                            <p className="text-[11px] text-emerald-400 font-medium">Ready-to-post status template</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setWhatsAppAdProduct(null)}
+                          className="text-slate-400 hover:text-white transition-colors cursor-pointer text-lg px-2"
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      {/* Product Preview Card */}
+                      <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-3.5 space-y-2">
+                        <div className="flex items-center gap-3">
+                          {whatsAppAdProduct.image_path && relaySupabase ? (
+                            <img
+                              src={relaySupabase.storage.from(inventoryImageBucket).getPublicUrl(whatsAppAdProduct.image_path).data.publicUrl}
+                              alt={whatsAppAdProduct.title}
+                              className="h-16 w-16 rounded-lg object-cover border border-slate-700 shrink-0 bg-slate-950"
+                            />
+                          ) : (
+                            <div className="h-16 w-16 rounded-lg bg-slate-800 flex items-center justify-center text-slate-500 shrink-0 border border-slate-700">
+                              <Package className="h-8 w-8" />
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="font-bold text-white text-sm truncate">{whatsAppAdProduct.title}</p>
+                            <p className="text-slate-400 text-xs mt-0.5">
+                              {normalizeBrand(whatsAppAdProduct.brand)} · <span className="font-mono text-amber-300 font-bold">GHS {whatsAppAdProduct.price.toFixed(2)}</span>
+                            </p>
+                            {whatsAppAdProduct.image_path && relaySupabase && (
+                              <a
+                                href={relaySupabase.storage.from(inventoryImageBucket).getPublicUrl(whatsAppAdProduct.image_path).data.publicUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                download
+                                className="mt-1 inline-flex items-center gap-1 text-[11px] text-cyan-400 hover:underline"
+                              >
+                                <span>Open & Save Product Photo</span> ↗
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Formatted Text Preview */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="text-xs font-semibold text-slate-300">Formatted WhatsApp Status Caption:</label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const caption = generateWhatsAppAdCaption(whatsAppAdProduct);
+                              void navigator.clipboard.writeText(caption);
+                              setAdCopied(true);
+                              setTimeout(() => setAdCopied(false), 3000);
+                            }}
+                            className="text-xs text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-1 cursor-pointer"
+                          >
+                            {adCopied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                            <span>{adCopied ? 'Copied to Clipboard!' : 'Copy Text'}</span>
+                          </button>
+                        </div>
+                        <textarea
+                          readOnly
+                          rows={8}
+                          value={generateWhatsAppAdCaption(whatsAppAdProduct)}
+                          className="w-full rounded-xl border border-slate-800 bg-slate-900/90 p-3 font-mono text-xs text-slate-200 focus:outline-none select-all"
+                        />
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-800/80">
+                        <button
+                          type="button"
+                          onClick={() => setWhatsAppAdProduct(null)}
+                          className="px-4 py-2 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-all cursor-pointer"
+                        >
+                          Close
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const caption = generateWhatsAppAdCaption(whatsAppAdProduct);
+                            const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(caption)}`;
+                            window.open(waUrl, '_blank');
+                          }}
+                          className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:scale-[1.02] text-black text-xs font-black transition-all flex items-center gap-1.5 shadow-lg shadow-emerald-500/25 cursor-pointer"
+                        >
+                          <MessageCircle className="h-4 w-4" />
+                          <span>Share Directly to WhatsApp</span>
                         </button>
                       </div>
                     </div>
