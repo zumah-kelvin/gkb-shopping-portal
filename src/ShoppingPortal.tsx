@@ -181,6 +181,72 @@ export function parseGadgetType(itemOrHighlights: string | { title?: string; bra
   return 'Electronic Gadget';
 }
 
+// Canonical brand mapping and normalization
+export function normalizeBrand(rawBrand?: string): string {
+  if (!rawBrand) return 'Generic';
+  const trimmed = rawBrand.trim();
+  const lower = trimmed.toLowerCase();
+
+  const CANONICAL_MAP: Record<string, string> = {
+    'dell': 'Dell',
+    'hp': 'HP',
+    'hewlett-packard': 'HP',
+    'lenovo': 'Lenovo',
+    'apple': 'Apple',
+    'asus': 'ASUS',
+    'acer': 'Acer',
+    'toshiba': 'Toshiba',
+    'samsung': 'Samsung',
+    'microsoft': 'Microsoft',
+    'microsoft surface': 'Microsoft Surface',
+    'msi': 'MSI',
+    'razer': 'Razer',
+    'sony': 'Sony',
+    'google': 'Google',
+    'google pixel': 'Google Pixel',
+    'oneplus': 'OnePlus',
+    'xiaomi': 'Xiaomi',
+    'redmi': 'Xiaomi',
+    'poco': 'Poco',
+    'tecno': 'Tecno',
+    'infinix': 'Infinix',
+    'huawei': 'Huawei',
+    'oppo': 'OPPO',
+    'vivo': 'vivo',
+    'motorola': 'Motorola',
+    'nokia': 'Nokia',
+    'honor': 'Honor',
+    'realme': 'realme',
+    'logitech': 'Logitech',
+    'seagate': 'Seagate',
+    'sandisk': 'SanDisk',
+    'western digital': 'Western Digital',
+    'wd': 'WD',
+    'anker': 'Anker',
+    'baseus': 'Baseus',
+    'ugreen': 'Ugreen',
+    'orico': 'Orico',
+    'kingston': 'Kingston',
+    'transcend': 'Transcend',
+    'crucial': 'Crucial',
+    'corsair': 'Corsair',
+    'jbl': 'JBL',
+    'bose': 'Bose',
+    'lapto stand': 'Laptop Stand',
+    'laptop stand': 'Laptop Stand'
+  };
+
+  if (CANONICAL_MAP[lower]) {
+    return CANONICAL_MAP[lower];
+  }
+
+  // Capitalize each word properly if not in map
+  return trimmed
+    .split(/\s+/)
+    .map(w => (w.length <= 1 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()))
+    .join(' ');
+}
+
 // Clean highlights text by stripping internal metadata tags for display
 export function cleanHighlights(text: string): string {
   if (!text) return '';
@@ -603,6 +669,7 @@ export default function ShoppingPortal() {
           const vendor = parseVendor(item);
           return {
             ...item,
+            brand: normalizeBrand(item.brand),
             price: Number(item.price),
             category,
             gadgetType,
@@ -727,9 +794,9 @@ export default function ShoppingPortal() {
         return;
       }
 
-      const effectiveBrand = inventoryBrandSelect === 'Other (Custom Brand)'
+      const effectiveBrand = normalizeBrand(inventoryBrandSelect === 'Other (Custom Brand)'
         ? (inventoryCustomBrand.trim() || 'Custom Brand')
-        : inventoryBrandSelect;
+        : inventoryBrandSelect);
 
       setInventoryBusy(true);
       let uploadedImagePath: string | null = null;
@@ -822,6 +889,7 @@ export default function ShoppingPortal() {
 
         const newItem: InventoryItem = {
           ...data,
+          brand: normalizeBrand(data.brand || effectiveBrand),
           price: Number(data.price),
           category: inventoryCategory,
           gadgetType: inventoryCategory === 'gadgets' ? inventoryGadgetType : undefined,
@@ -1192,7 +1260,7 @@ export default function ShoppingPortal() {
           (item.vendorName && item.vendorName.toLowerCase().includes(searchQuery.toLowerCase())) ||
           cleanHighlights(item.highlights).toLowerCase().includes(searchQuery.toLowerCase());
 
-        const matchesBrand = selectedBrand === 'All' || item.brand.toLowerCase() === selectedBrand.toLowerCase();
+        const matchesBrand = selectedBrand === 'All' || normalizeBrand(item.brand).toLowerCase() === selectedBrand.toLowerCase();
 
         const matchesVendor = selectedVendorFilter === 'all' || (
           selectedVendorFilter === 'official'
@@ -1206,7 +1274,7 @@ export default function ShoppingPortal() {
       const uniqueBrands = ['All', ...Array.from(new Set(
         inventoryItems
           .filter(item => selectedCategory === 'all' || (item.category || parseCategory(item)) === selectedCategory)
-          .map(i => i.brand)
+          .map(i => normalizeBrand(i.brand))
       ))];
 
       const availableVendors = Array.from(new Set(
@@ -1604,7 +1672,7 @@ export default function ShoppingPortal() {
                               <HardDrive className="h-14 w-14 text-emerald-500/40" />
                             )}
                             <span className="mt-2 text-xs font-mono uppercase tracking-wider text-slate-500">
-                              {item.brand} · {isPhone ? 'Mobile Handset' : isGadget ? 'Electronic Gadget' : 'Laptop Workstation'}
+                              {normalizeBrand(item.brand)} · {isPhone ? 'Mobile Handset' : isGadget ? 'Electronic Gadget' : 'Laptop Workstation'}
                             </span>
                           </div>
                         )}
@@ -1612,7 +1680,7 @@ export default function ShoppingPortal() {
                         {/* Category & Brand Badges */}
                         <div className="absolute top-3 left-3 flex items-center gap-1.5">
                           <span className="rounded-full bg-slate-950/85 backdrop-blur-md border border-cyan-500/30 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-cyan-300">
-                            {item.brand}
+                            {normalizeBrand(item.brand)}
                           </span>
                           <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wide border ${isPhone
                               ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
@@ -2416,7 +2484,7 @@ WiFi
                                         </span>
                                       </div>
                                       <p className="text-xs text-slate-400 mt-1">
-                                        {item.brand} · <span className="font-bold text-amber-300 font-mono">GHS {item.price.toFixed(2)}</span>
+                                        {normalizeBrand(item.brand)} · <span className="font-bold text-amber-300 font-mono">GHS {item.price.toFixed(2)}</span>
                                         {category !== 'gadgets' && ` · ${item.ram} RAM · ${item.storage}`}
                                         {category === 'gadgets' && item.storage && item.storage !== 'None' && item.storage !== 'N/A' && ` · Capacity: ${item.storage}`}
                                       </p>
