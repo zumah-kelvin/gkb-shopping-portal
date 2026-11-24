@@ -1691,7 +1691,7 @@ export default function ShoppingPortal() {
           </header>
 
           {/* Main Container */}
-          <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-8">
             {/* ================= STOREFRONT CATALOG ================= */}
             {activeTab === 'catalog' && (
       <div className="space-y-8 animate-fadeIn">
@@ -2113,7 +2113,7 @@ export default function ShoppingPortal() {
               <p className="text-xs text-slate-400">Try adjusting your category, search query, or brand filter.</p>
             </div>
           ) : (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 md:gap-6 md:grid-cols-2 lg:grid-cols-3">
               {displayItems.map(item => {
                 const imageUrl = item.image_path && relaySupabase
                   ? relaySupabase.storage.from(inventoryImageBucket).getPublicUrl(item.image_path).data.publicUrl
@@ -2127,11 +2127,11 @@ export default function ShoppingPortal() {
                 return (
                   <article
                     key={item.id}
-                    className="group flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900/60 transition-all duration-300 hover:border-cyan-500/40 hover:shadow-[0_0_25px_rgba(6,182,212,0.15)]"
+                    className="group flex flex-col justify-between overflow-hidden rounded-xl sm:rounded-2xl border border-slate-800/80 bg-slate-900/60 transition-all duration-300 hover:border-cyan-500/40 hover:shadow-[0_0_25px_rgba(6,182,212,0.15)]"
                   >
                     <div>
-                      {/* Image Preview Container */}
-                      <div className="relative aspect-[16/10] w-full overflow-hidden bg-slate-950 flex items-center justify-center border-b border-slate-800/60">
+                      {/* Image Preview Container (square on mobile like Jumia, 16/10 on desktop) */}
+                      <div className="relative aspect-square sm:aspect-[16/10] w-full overflow-hidden bg-slate-950 flex items-center justify-center border-b border-slate-800/60">
                         {imageUrl ? (
                           <img
                             src={imageUrl}
@@ -2139,26 +2139,26 @@ export default function ShoppingPortal() {
                             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                           />
                         ) : (
-                          <div className="flex flex-col items-center justify-center p-6 text-slate-600">
+                          <div className="flex flex-col items-center justify-center p-3 sm:p-6 text-slate-600">
                             {isLaptop ? (
-                              <Laptop className="h-14 w-14 text-cyan-500/40" />
+                              <Laptop className="h-10 w-10 sm:h-14 sm:w-14 text-cyan-500/40" />
                             ) : isPhone ? (
-                              <Smartphone className="h-14 w-14 text-purple-500/40" />
+                              <Smartphone className="h-10 w-10 sm:h-14 sm:w-14 text-purple-500/40" />
                             ) : (
-                              <HardDrive className="h-14 w-14 text-emerald-500/40" />
+                              <HardDrive className="h-10 w-10 sm:h-14 sm:w-14 text-emerald-500/40" />
                             )}
-                            <span className="mt-2 text-xs font-mono uppercase tracking-wider text-slate-500">
-                              {normalizeBrand(item.brand)} · {isPhone ? 'Mobile Handset' : isGadget ? 'Electronic Gadget' : 'Laptop Workstation'}
+                            <span className="mt-1 text-[9px] sm:text-xs font-mono uppercase tracking-wider text-slate-500 text-center">
+                              {normalizeBrand(item.brand)}
                             </span>
                           </div>
                         )}
 
                         {/* Category & Brand Badges */}
-                        <div className="absolute top-3 left-3 flex items-center gap-1.5">
-                          <span className="rounded-full bg-slate-950/85 backdrop-blur-md border border-cyan-500/30 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-cyan-300">
+                        <div className="absolute top-2 left-2 sm:top-3 sm:left-3 flex items-center gap-1 sm:gap-1.5 flex-wrap">
+                          <span className="rounded-full bg-slate-950/85 backdrop-blur-md border border-cyan-500/30 px-2 py-0.5 sm:px-3 sm:py-1 text-[9px] sm:text-[11px] font-bold uppercase tracking-wider text-cyan-300">
                             {normalizeBrand(item.brand)}
                           </span>
-                          <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wide border ${isPhone
+                          <span className={`rounded-full px-1.5 py-0.5 sm:px-2.5 sm:py-0.5 text-[8px] sm:text-[10px] font-mono font-bold uppercase tracking-wide border ${isPhone
                               ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
                               : isGadget
                                 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
@@ -2169,65 +2169,66 @@ export default function ShoppingPortal() {
                         </div>
 
                         {/* Vendor / Official Badge on Top-Right */}
-                        <div className="absolute top-3 right-3 flex items-center">
+                        <div className="absolute top-2 right-2 sm:top-3 sm:right-3 flex items-center">
                           {item.isOfficial ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-slate-950/85 backdrop-blur-md border border-cyan-500/40 px-2.5 py-1 text-[10px] font-bold text-cyan-300 shadow-sm">
-                              <BadgeCheck className="h-3 w-3 text-cyan-400" />
-                              <span>GKB Official</span>
+                            <span className="inline-flex items-center gap-0.5 sm:gap-1 rounded-full bg-slate-950/85 backdrop-blur-md border border-cyan-500/40 px-1.5 py-0.5 sm:px-2.5 sm:py-1 text-[8px] sm:text-[10px] font-bold text-cyan-300 shadow-sm">
+                              <BadgeCheck className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-cyan-400" />
+                              <span className="hidden xs:inline sm:inline">GKB Official</span>
+                              <span className="xs:hidden sm:hidden">Official</span>
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-slate-950/85 backdrop-blur-md border border-amber-500/40 px-2.5 py-1 text-[10px] font-bold text-amber-300 shadow-sm">
-                              <Store className="h-3 w-3 text-amber-400" />
-                              <span className="max-w-[110px] truncate">{item.vendorName || 'Partner Vendor'}</span>
+                            <span className="inline-flex items-center gap-0.5 sm:gap-1 rounded-full bg-slate-950/85 backdrop-blur-md border border-amber-500/40 px-1.5 py-0.5 sm:px-2.5 sm:py-1 text-[8px] sm:text-[10px] font-bold text-amber-300 shadow-sm">
+                              <Store className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-amber-400" />
+                              <span className="max-w-[60px] sm:max-w-[110px] truncate">{item.vendorName || 'Vendor'}</span>
                             </span>
                           )}
                         </div>
                       </div>
 
                       {/* Details */}
-                      <div className="p-5 space-y-3">
+                      <div className="p-3 sm:p-5 space-y-2 sm:space-y-3">
                         <div>
-                          <h3 className="text-lg font-bold text-white group-hover:text-cyan-300 transition-colors">
+                          <h3 className="text-xs sm:text-base lg:text-lg font-bold text-white group-hover:text-cyan-300 transition-colors line-clamp-2 leading-tight">
                             {item.title}
                           </h3>
                           {/* Seller / Vendor Attribution Tag */}
-                          <div className="mt-1 flex items-center gap-1 text-[11px] text-slate-400">
-                            <span className="text-slate-500">Sold by:</span>
+                          <div className="mt-0.5 sm:mt-1 flex items-center gap-1 text-[9px] sm:text-[11px] text-slate-400 truncate">
+                            <span className="text-slate-500">By:</span>
                             {item.isOfficial ? (
-                              <span className="font-semibold text-cyan-400 flex items-center gap-1">
-                                <Zap className="h-3 w-3" /> GKB Official Store
+                              <span className="font-semibold text-cyan-400 flex items-center gap-1 truncate">
+                                <Zap className="h-2.5 w-2.5 sm:h-3 sm:w-3 shrink-0" /> GKB Official
                               </span>
                             ) : (
-                              <span className="font-semibold text-amber-300 flex items-center gap-1">
-                                <Store className="h-3 w-3" /> {item.vendorName || 'Authorized Vendor'}
+                              <span className="font-semibold text-amber-300 flex items-center gap-1 truncate">
+                                <Store className="h-2.5 w-2.5 sm:h-3 sm:w-3 shrink-0" /> {item.vendorName || 'Authorized Vendor'}
                               </span>
                             )}
                           </div>
                         </div>
 
                         {/* Spec Badges adapted to category */}
-                        <div className="flex flex-wrap gap-2 text-xs">
+                        <div className="flex flex-wrap gap-1 sm:gap-2 text-[10px] sm:text-xs">
                           {isLaptop && (
                             <>
-                              <span className="rounded-md border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 font-mono text-purple-300">
+                              <span className="rounded-md border border-purple-500/30 bg-purple-500/10 px-1.5 py-0.5 font-mono text-purple-300">
                                 {item.ram} RAM
                               </span>
-                              <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 font-mono text-cyan-300">
+                              <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-0.5 font-mono text-cyan-300">
                                 {item.storage}
                               </span>
-                              <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-300">
-                                Verified Stock
+                              <span className="hidden sm:inline-block rounded-md border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-emerald-300">
+                                Verified
                               </span>
                             </>
                           )}
 
                           {isPhone && (
                             <>
-                              <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-0.5 font-mono text-cyan-300 font-bold">
-                                {item.storage} Storage
+                              <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-1.5 sm:px-2.5 py-0.5 font-mono text-cyan-300 font-bold">
+                                {item.storage}
                               </span>
-                              <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-300">
-                                Genuine Handset
+                              <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-emerald-300">
+                                Genuine
                               </span>
                             </>
                           )}
@@ -2235,32 +2236,31 @@ export default function ShoppingPortal() {
                           {isGadget && (
                             <>
                               {item.storage && item.storage !== 'None' && item.storage !== 'None / N/A' && item.storage !== 'N/A' && (
-                                <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 font-mono text-cyan-300">
+                                <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-0.5 font-mono text-cyan-300">
                                   {item.storage}
                                 </span>
                               )}
-                              <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-300">
-                                {item.gadgetType || 'Electronic Gadget'}
-                              </span>
-                              <span className="rounded-md border border-slate-700 bg-slate-800/80 px-2 py-0.5 text-slate-300">
-                                Genuine Hardware
+                              <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-emerald-300 truncate max-w-[90px] sm:max-w-none">
+                                {item.gadgetType || 'Gadget'}
                               </span>
                             </>
                           )}
                         </div>
 
-                        {/* Highlights */}
-                        <InventoryHighlights text={item.highlights} />
+                        {/* Highlights (compact on mobile) */}
+                        <div className="text-xs">
+                          <InventoryHighlights text={item.highlights} />
+                        </div>
                       </div>
                     </div>
 
                     {/* Footer Actions */}
-                    <div className="border-t border-slate-800/80 p-5 pt-4 flex items-center justify-between gap-2">
-                      <div>
-                        <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Cash / MoMo Price</p>
+                    <div className="border-t border-slate-800/80 p-3 sm:p-5 pt-2.5 sm:pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-[9px] sm:text-[10px] uppercase font-bold tracking-wider text-slate-400">Cash / MoMo</p>
                         {isItemOwner(item) && editingPriceItemId === item.id ? (
-                          <div className="mt-1 flex items-center gap-1.5 animate-fadeIn">
-                            <span className="text-xs font-mono font-bold text-amber-300">GHS</span>
+                          <div className="mt-1 flex items-center gap-1 animate-fadeIn flex-wrap">
+                            <span className="text-[10px] sm:text-xs font-mono font-bold text-amber-300">GHS</span>
                             <input
                               type="number"
                               step="0.01"
@@ -2275,7 +2275,7 @@ export default function ShoppingPortal() {
                                   handleCancelEditPrice();
                                 }
                               }}
-                              className="w-24 rounded border border-cyan-400 bg-slate-900 px-2 py-1 text-xs font-bold text-white focus:outline-none"
+                              className="w-16 sm:w-24 rounded border border-cyan-400 bg-slate-900 px-1.5 py-0.5 text-xs font-bold text-white focus:outline-none"
                               autoFocus
                             />
                             <button
@@ -2298,18 +2298,18 @@ export default function ShoppingPortal() {
                             </button>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-2">
-                            <p className="text-xl font-black text-yellow-300">
+                          <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+                            <p className="text-xs sm:text-xl font-black text-yellow-300 font-mono tracking-tight">
                               GHS {item.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </p>
                             {isItemOwner(item) && (
                               <button
                                 type="button"
                                 onClick={() => handleStartEditPrice(item)}
-                                className="p-1 rounded-md text-slate-400 hover:text-cyan-300 hover:bg-slate-800/60 transition-colors cursor-pointer"
+                                className="p-0.5 sm:p-1 rounded-md text-slate-400 hover:text-cyan-300 hover:bg-slate-800/60 transition-colors cursor-pointer"
                                 title="Edit price (Owner/Admin)"
                               >
-                                <Pencil className="h-3.5 w-3.5" />
+                                <Pencil className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5" />
                               </button>
                             )}
                           </div>
@@ -2318,10 +2318,10 @@ export default function ShoppingPortal() {
                       <button
                         type="button"
                         onClick={() => handleOrderProduct(item)}
-                        className="gkb-order-btn inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-600 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-black shadow-md shadow-cyan-500/20 hover:scale-105 transition-all cursor-pointer"
+                        className="gkb-order-btn w-full sm:w-auto inline-flex items-center justify-center gap-1 sm:gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-600 px-2.5 sm:px-4 py-2 sm:py-2.5 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-black shadow-md shadow-cyan-500/20 hover:scale-105 active:scale-95 transition-all cursor-pointer shrink-0"
                       >
-                        Order Now
-                        <ArrowRight className="h-3.5 w-3.5" />
+                        <span>Order Now</span>
+                        <ArrowRight className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                       </button>
                     </div>
                   </article>
