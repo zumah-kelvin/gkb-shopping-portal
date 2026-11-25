@@ -542,6 +542,7 @@ export default function ShoppingPortal() {
   const [botLogs, setBotLogs] = useState<string[]>([]);
   const [showBotModal, setShowBotModal] = useState(false);
   const [botQrDataUrl, setBotQrDataUrl] = useState<string | null>(null);
+  const [botLinkTab, setBotLinkTab] = useState<'qr' | 'phone'>('qr');
   const [botPairingPhone, setBotPairingPhone] = useState('233552117787');
   const [botPairingCode, setBotPairingCode] = useState<string | null>(null);
   const [isRequestingPairingCode, setIsRequestingPairingCode] = useState(false);
@@ -566,6 +567,33 @@ export default function ShoppingPortal() {
     const interval = setInterval(fetchBotStatus, 12000);
     return () => clearInterval(interval);
   }, [isAdmin, fetchBotStatus]);
+
+  // Fast polling of QR and bot status when modal is active
+  useEffect(() => {
+    if (!showBotModal || botStatus === 'ready') return;
+    void handleFetchQr();
+    const interval = setInterval(() => {
+      void handleFetchQr();
+      void fetchBotStatus();
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [showBotModal, botStatus, fetchBotStatus]);
+
+  // Auto-close modal on successful connection
+  useEffect(() => {
+    if (botStatus === 'ready' && showBotModal) {
+      setShowBotModal(false);
+      alert('🎉 WhatsApp Connected Successfully! Bot is now active 24/7.');
+    }
+  }, [botStatus, showBotModal]);
+
+  const handleCancelPairing = async () => {
+    setBotPairingCode(null);
+    try {
+      await fetch(`${WHATSAPP_BOT_URL}/api/cancel-pairing`);
+      await handleFetchQr();
+    } catch {}
+  };
 
   const handleTriggerBotPost = async () => {
     setIsBotPosting(true);
@@ -593,9 +621,14 @@ export default function ShoppingPortal() {
   };
 
   const handleRequestPairingCode = async () => {
-    const clean = botPairingPhone.replace(/\D/g, '');
+    let clean = botPairingPhone.replace(/\D/g, '');
+    if (clean.startsWith('0') && clean.length === 10) {
+      clean = '233' + clean.substring(1);
+    } else if (clean.startsWith('2330') && clean.length === 13) {
+      clean = '233' + clean.substring(4);
+    }
     if (!clean || clean.length < 9) {
-      alert('Please enter a valid phone number with country code (e.g. 233552117787)');
+      alert('Please enter a valid phone number (e.g. 0552117787 or 233552117787)');
       return;
     }
     setIsRequestingPairingCode(true);
@@ -2813,71 +2846,7 @@ WiFi
                   </div>
                 )}
 
-                {/* ================= WHATSAPP LINKING MODAL ================= */}
-                {showBotModal && (
-                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
-                    <div className="w-full max-w-md rounded-2xl border border-emerald-500/30 bg-slate-900 p-6 shadow-2xl space-y-5 text-center">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-base font-bold text-white flex items-center gap-2">
-                          <MessageCircle className="h-5 w-5 text-emerald-400" />
-                          Link WhatsApp with Bot
-                        </h3>
-                        <button
-                          type="button"
-                          onClick={() => setShowBotModal(false)}
-                          className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer"
-                        >
-                          <X className="h-5 w-5" />
-                        </button>
-                      </div>
 
-                      <div className="space-y-3">
-                        <p className="text-xs text-slate-300">
-                          Scan this QR code from WhatsApp on your phone:
-                        </p>
-                        <div className="p-3 bg-white rounded-xl inline-block shadow-lg mx-auto">
-                          {botQrDataUrl ? (
-                            <img src={botQrDataUrl} alt="WhatsApp QR Code" className="w-52 h-52 block" />
-                          ) : (
-                            <div className="w-52 h-52 flex flex-col items-center justify-center text-slate-700 text-xs gap-2">
-                              <RefreshCw className="h-6 w-6 animate-spin text-emerald-600" />
-                              <span>Generating fresh QR code…</span>
-                            </div>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-slate-500">
-                          WhatsApp &rarr; Settings &rarr; Linked Devices &rarr; Link a Device
-                        </p>
-                      </div>
-
-                      <div className="border-t border-slate-800 pt-4 space-y-2">
-                        <p className="text-xs font-semibold text-slate-300">Or Link using Phone Number (No Camera)</p>
-                        <div className="flex gap-2">
-                          <input
-                            type="tel"
-                            value={botPairingPhone}
-                            onChange={e => setBotPairingPhone(e.target.value)}
-                            placeholder="e.g. 233552117787"
-                            className="flex-1 px-3 py-2 rounded-xl border border-slate-700 bg-slate-950 font-mono text-xs text-white focus:outline-none focus:border-emerald-500"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => void handleRequestPairingCode()}
-                            disabled={isRequestingPairingCode}
-                            className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold cursor-pointer transition-all"
-                          >
-                            {isRequestingPairingCode ? 'Getting…' : 'Get Code'}
-                          </button>
-                        </div>
-                        {botPairingCode && (
-                          <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-mono text-xl font-black tracking-widest animate-pulse">
-                            {botPairingCode}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
 
               <form onSubmit={handleAddInventoryItem} className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -3830,14 +3799,15 @@ WiFi
                   </div>
                 )}
 
+
                 {/* ================= WHATSAPP LINKING MODAL ================= */}
                 {showBotModal && (
-                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
-                    <div className="w-full max-w-md rounded-2xl border border-emerald-500/30 bg-slate-900 p-6 shadow-2xl space-y-5 text-center">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fadeIn">
+                    <div className="w-full max-w-md rounded-2xl border border-emerald-500/30 bg-slate-900 p-6 shadow-2xl space-y-4 text-center">
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <h3 className="text-sm font-bold text-white flex items-center gap-2">
                           <MessageCircle className="h-5 w-5 text-emerald-400" />
-                          Link WhatsApp with Bot
+                          Link WhatsApp with Cloud Bot
                         </h3>
                         <button
                           type="button"
@@ -3848,53 +3818,106 @@ WiFi
                         </button>
                       </div>
 
-                      <div className="space-y-3">
-                        <p className="text-xs text-slate-300">
-                          Scan this QR code from WhatsApp on your phone:
-                        </p>
-                        <div className="p-3 bg-white rounded-xl inline-block shadow-lg mx-auto">
-                          {botQrDataUrl ? (
-                            <img src={botQrDataUrl} alt="WhatsApp QR Code" className="w-52 h-52 block" />
-                          ) : (
-                            <div className="w-52 h-52 flex flex-col items-center justify-center text-slate-700 text-xs gap-2">
-                              <RefreshCw className="h-6 w-6 animate-spin text-emerald-600" />
-                              <span>Generating fresh QR code…</span>
+                      {/* Mode Toggle Tabs */}
+                      <div className="flex rounded-xl bg-slate-950 p-1 border border-slate-800 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setBotLinkTab('qr')}
+                          className={`flex-1 py-1.5 rounded-lg font-bold transition-all ${
+                            botLinkTab === 'qr'
+                              ? 'bg-emerald-500 text-slate-950 shadow-md'
+                              : 'text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          📷 QR Code (Instant)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBotLinkTab('phone')}
+                          className={`flex-1 py-1.5 rounded-lg font-bold transition-all ${
+                            botLinkTab === 'phone'
+                              ? 'bg-emerald-500 text-slate-950 shadow-md'
+                              : 'text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          📱 Phone Code
+                        </button>
+                      </div>
+
+                      {botLinkTab === 'qr' ? (
+                        <div className="space-y-3">
+                          <p className="text-xs text-slate-300">
+                            Scan with WhatsApp camera for instant 1-second linking:
+                          </p>
+                          <div className="p-3 bg-white rounded-xl inline-block shadow-lg mx-auto">
+                            {botQrDataUrl ? (
+                              <img src={botQrDataUrl} alt="WhatsApp QR Code" className="w-52 h-52 block" />
+                            ) : (
+                              <div className="w-52 h-52 flex flex-col items-center justify-center text-slate-700 text-xs gap-2">
+                                <RefreshCw className="h-6 w-6 animate-spin text-emerald-600" />
+                                <span>Generating fresh QR code…</span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-400 space-y-1 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 text-left">
+                            <p className="font-semibold text-emerald-400">How to link in 3 seconds:</p>
+                            <p>1. Open WhatsApp on your phone</p>
+                            <p>2. Tap <b>Settings</b> (or ⋮) → <b>Linked Devices</b> → <b>Link a Device</b></p>
+                            <p>3. Point your camera at this QR code</p>
+                            <p className="text-[10px] text-amber-400/90 pt-1">
+                              💡 <i>Viewing on your phone? Open this Admin portal on a laptop or PC screen to scan this QR code!</i>
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <p className="text-xs text-slate-300">
+                            Generate an 8-character pairing code for your number:
+                          </p>
+                          <div className="flex gap-2">
+                            <input
+                              type="tel"
+                              value={botPairingPhone}
+                              onChange={e => setBotPairingPhone(e.target.value)}
+                              placeholder="e.g. 0552117787 or 233552117787"
+                              className="flex-1 px-3 py-2 rounded-xl border border-slate-700 bg-slate-950 font-mono text-xs text-white focus:outline-none focus:border-emerald-500"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => void handleRequestPairingCode()}
+                              disabled={isRequestingPairingCode}
+                              className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold cursor-pointer transition-all"
+                            >
+                              {isRequestingPairingCode ? 'Getting…' : 'Get Code'}
+                            </button>
+                          </div>
+
+                          {botPairingCode && (
+                            <div className="space-y-2 p-3 rounded-xl bg-slate-950 border border-emerald-500/40">
+                              <p className="text-[11px] text-slate-400">Your WhatsApp Pairing Code:</p>
+                              <div className="text-2xl font-black font-mono tracking-widest text-emerald-400 select-all py-1">
+                                {botPairingCode}
+                              </div>
+                              <p className="text-[11px] text-amber-300 leading-tight">
+                                ⏳ Enter code on your phone within 60 seconds:
+                                <br />
+                                <b>WhatsApp → Linked Devices → Link with phone number instead</b>
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => void handleCancelPairing()}
+                                className="text-[11px] text-slate-400 hover:text-white underline cursor-pointer pt-1"
+                              >
+                                Cancel / Switch back to QR Code
+                              </button>
                             </div>
                           )}
                         </div>
-                        <p className="text-[11px] text-slate-500">
-                          WhatsApp &rarr; Settings &rarr; Linked Devices &rarr; Link a Device
-                        </p>
-                      </div>
-
-                      <div className="border-t border-slate-800 pt-4 space-y-2">
-                        <p className="text-xs font-semibold text-slate-300">Or Link using Phone Number (No Camera)</p>
-                        <div className="flex gap-2">
-                          <input
-                            type="tel"
-                            value={botPairingPhone}
-                            onChange={e => setBotPairingPhone(e.target.value)}
-                            placeholder="e.g. 233552117787"
-                            className="flex-1 px-3 py-2 rounded-xl border border-slate-700 bg-slate-950 font-mono text-xs text-white focus:outline-none focus:border-emerald-500"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => void handleRequestPairingCode()}
-                            disabled={isRequestingPairingCode}
-                            className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold cursor-pointer transition-all"
-                          >
-                            {isRequestingPairingCode ? 'Getting…' : 'Get Code'}
-                          </button>
-                        </div>
-                        {botPairingCode && (
-                          <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-mono text-xl font-black tracking-widest animate-pulse">
-                            {botPairingCode}
-                          </div>
-                        )}
-                      </div>
+                      )}
                     </div>
                   </div>
                 )}
+
               </div>
               );
 }
