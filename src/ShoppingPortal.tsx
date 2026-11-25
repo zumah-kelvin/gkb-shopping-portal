@@ -532,6 +532,93 @@ export default function ShoppingPortal() {
   const [whatsAppAdProduct, setWhatsAppAdProduct] = useState<InventoryItem | null>(null);
   const [adCopied, setAdCopied] = useState(false);
 
+  // WhatsApp Cloud Bot Admin Integration State
+  const WHATSAPP_BOT_URL = 'https://gkb-whatsapp-bot.onrender.com';
+  const [botStatus, setBotStatus] = useState<'loading' | 'ready' | 'waiting_for_qr' | 'offline'>('loading');
+  const [botUser, setBotUser] = useState<{ name?: string; phone?: string } | null>(null);
+  const [isBotPosting, setIsBotPosting] = useState(false);
+  const [botPostResult, setBotPostResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [showBotLogs, setShowBotLogs] = useState(false);
+  const [botLogs, setBotLogs] = useState<string[]>([]);
+  const [showBotModal, setShowBotModal] = useState(false);
+  const [botQrDataUrl, setBotQrDataUrl] = useState<string | null>(null);
+  const [botPairingPhone, setBotPairingPhone] = useState('233552117787');
+  const [botPairingCode, setBotPairingCode] = useState<string | null>(null);
+  const [isRequestingPairingCode, setIsRequestingPairingCode] = useState(false);
+
+  // Fetch Bot Status periodically when in Admin view
+  const fetchBotStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`${WHATSAPP_BOT_URL}/api/status`);
+      if (!res.ok) throw new Error('Bot server unreachable');
+      const data = await res.json();
+      setBotStatus(data.status || 'offline');
+      setBotUser(data.connectedUser || null);
+      if (Array.isArray(data.recentLogs)) setBotLogs(data.recentLogs);
+    } catch {
+      setBotStatus('offline');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    void fetchBotStatus();
+    const interval = setInterval(fetchBotStatus, 12000);
+    return () => clearInterval(interval);
+  }, [isAdmin, fetchBotStatus]);
+
+  const handleTriggerBotPost = async () => {
+    setIsBotPosting(true);
+    setBotPostResult(null);
+    try {
+      const res = await fetch(`${WHATSAPP_BOT_URL}/api/post-now`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to post to WhatsApp Status');
+      setBotPostResult({ success: true, message: data.message || 'Status posting started! 5 gadgets will appear on your WhatsApp Status.' });
+      setTimeout(fetchBotStatus, 3000);
+    } catch (err: any) {
+      setBotPostResult({ success: false, message: err.message || 'Error communicating with bot server.' });
+    } finally {
+      setIsBotPosting(false);
+    }
+  };
+
+  const handleFetchQr = async () => {
+    try {
+      const res = await fetch(`${WHATSAPP_BOT_URL}/api/qr`);
+      const data = await res.json();
+      if (data.qrDataUrl) setBotQrDataUrl(data.qrDataUrl);
+      if (data.status) setBotStatus(data.status);
+    } catch {}
+  };
+
+  const handleRequestPairingCode = async () => {
+    const clean = botPairingPhone.replace(/\D/g, '');
+    if (!clean || clean.length < 9) {
+      alert('Please enter a valid phone number with country code (e.g. 233552117787)');
+      return;
+    }
+    setIsRequestingPairingCode(true);
+    setBotPairingCode(null);
+    try {
+      const res = await fetch(`${WHATSAPP_BOT_URL}/api/pairing-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: clean })
+      });
+      const data = await res.json();
+      if (data.code) {
+        setBotPairingCode(data.code);
+      } else {
+        alert(data.error || 'Failed to generate code.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error requesting code');
+    } finally {
+      setIsRequestingPairingCode(false);
+    }
+  };
+
   const generateWhatsAppAdCaption = (item: InventoryItem) => {
     const category = item.category || parseCategory(item);
     const isPhone = category === 'phones';
@@ -2476,6 +2563,135 @@ CREATE POLICY gkb_inventory_delete_admin ON public.gkb_inventory_items FOR DELET
                 </div>
               )}
 
+              {/* ================= WHATSAPP 24/7 STATUS BOT ADMIN CONTROL ================= */}
+              {isAdmin && (
+                <div className="mt-6 rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-slate-900/95 via-emerald-950/20 to-slate-900/95 p-5 sm:p-6 shadow-xl shadow-emerald-950/20">
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                          <MessageCircle className="h-4 w-4" />
+                        </span>
+                        <h3 className="text-base font-bold text-white flex items-center gap-2">
+                          WhatsApp Status Auto-Post Bot
+                        </h3>
+                        {botStatus === 'ready' ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            Connected 24/7
+                          </span>
+                        ) : botStatus === 'waiting_for_qr' ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/40">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                            Scan QR Required
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                            <RefreshCw className="h-3 w-3 animate-spin" />
+                            Checking Cloud Bot...
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-400 leading-relaxed max-w-xl">
+                        Automatically publishes 5 featured inventory deals with high-res photos, specs & prices to your WhatsApp Status every morning at 9:00 AM — hands-free without keeping your laptop on.
+                        {botUser?.name && <span className="ml-1 text-emerald-300 font-semibold">Linked Account: {botUser.name} ({botUser.phone})</span>}
+                      </p>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => void fetchBotStatus()}
+                        title="Refresh bot status"
+                        className="p-2.5 rounded-xl border border-slate-700 bg-slate-800/80 text-slate-400 hover:text-white transition-all cursor-pointer"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </button>
+
+                      {botStatus === 'waiting_for_qr' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleFetchQr();
+                            setShowBotModal(true);
+                          }}
+                          className="px-4 py-2.5 rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-amber-500/10"
+                        >
+                          <Smartphone className="h-4 w-4" />
+                          <span>Link WhatsApp</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => void handleTriggerBotPost()}
+                        disabled={isBotPosting || botStatus !== 'ready'}
+                        className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer shadow-lg ${
+                          botStatus === 'ready'
+                            ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:scale-[1.02] text-slate-950 shadow-emerald-500/25'
+                            : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                        }`}
+                      >
+                        {isBotPosting ? (
+                          <>
+                            <RefreshCw className="h-4 w-4 animate-spin text-slate-950" />
+                            <span>Posting Deals to Status...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Zap className="h-4 w-4" />
+                            <span>🚀 Post 5 Featured Gadgets Now</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowBotLogs(v => !v)}
+                        className="px-3.5 py-2.5 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-all cursor-pointer"
+                      >
+                        {showBotLogs ? 'Hide Logs' : 'View Logs'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Post Result Alert */}
+                  {botPostResult && (
+                    <div className={`mt-4 p-3 rounded-xl border text-xs font-medium flex items-center justify-between ${
+                      botPostResult.success
+                        ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200'
+                        : 'bg-red-500/15 border-red-500/40 text-red-200'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        {botPostResult.success ? <CheckCircle className="h-4 w-4 text-emerald-400" /> : <AlertTriangle className="h-4 w-4 text-red-400" />}
+                        <span>{botPostResult.message}</span>
+                      </div>
+                      <button type="button" onClick={() => setBotPostResult(null)} className="text-slate-400 hover:text-white">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Expandable Logs Drawer */}
+                  {showBotLogs && (
+                    <div className="mt-4 p-4 rounded-xl border border-slate-800 bg-slate-950 font-mono text-[11px] text-slate-400 space-y-1.5 max-h-52 overflow-y-auto">
+                      <div className="flex items-center justify-between text-slate-300 font-bold border-b border-slate-800 pb-2 mb-2">
+                        <span>Live Cloud Bot Logs</span>
+                        <span className="text-[10px] text-slate-500 font-normal">Auto-posts daily at 9:00 AM</span>
+                      </div>
+                      {botLogs.length > 0 ? (
+                        botLogs.map((log, idx) => (
+                          <div key={idx} className="leading-relaxed">{log}</div>
+                        ))
+                      ) : (
+                        <p className="text-slate-600">No logs yet. Bot running on Render cloud.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* ================= SMART WHATSAPP SPEC ANALYZER ================= */}
               <div className="mt-6 rounded-2xl border border-cyan-500/40 bg-gradient-to-br from-slate-900/95 via-cyan-950/20 to-slate-900/95 p-5 sm:p-6 shadow-xl shadow-cyan-950/30">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-800/80">
@@ -2594,6 +2810,72 @@ WiFi
                         )}
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* ================= WHATSAPP LINKING MODAL ================= */}
+                {showBotModal && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
+                    <div className="w-full max-w-md rounded-2xl border border-emerald-500/30 bg-slate-900 p-6 shadow-2xl space-y-5 text-center">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-base font-bold text-white flex items-center gap-2">
+                          <MessageCircle className="h-5 w-5 text-emerald-400" />
+                          Link WhatsApp with Bot
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={() => setShowBotModal(false)}
+                          className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer"
+                        >
+                          <X className="h-5 w-5" />
+                        </button>
+                      </div>
+
+                      <div className="space-y-3">
+                        <p className="text-xs text-slate-300">
+                          Scan this QR code from WhatsApp on your phone:
+                        </p>
+                        <div className="p-3 bg-white rounded-xl inline-block shadow-lg mx-auto">
+                          {botQrDataUrl ? (
+                            <img src={botQrDataUrl} alt="WhatsApp QR Code" className="w-52 h-52 block" />
+                          ) : (
+                            <div className="w-52 h-52 flex flex-col items-center justify-center text-slate-700 text-xs gap-2">
+                              <RefreshCw className="h-6 w-6 animate-spin text-emerald-600" />
+                              <span>Generating fresh QR code…</span>
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                          WhatsApp &rarr; Settings &rarr; Linked Devices &rarr; Link a Device
+                        </p>
+                      </div>
+
+                      <div className="border-t border-slate-800 pt-4 space-y-2">
+                        <p className="text-xs font-semibold text-slate-300">Or Link using Phone Number (No Camera)</p>
+                        <div className="flex gap-2">
+                          <input
+                            type="tel"
+                            value={botPairingPhone}
+                            onChange={e => setBotPairingPhone(e.target.value)}
+                            placeholder="e.g. 233552117787"
+                            className="flex-1 px-3 py-2 rounded-xl border border-slate-700 bg-slate-950 font-mono text-xs text-white focus:outline-none focus:border-emerald-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void handleRequestPairingCode()}
+                            disabled={isRequestingPairingCode}
+                            className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold cursor-pointer transition-all"
+                          >
+                            {isRequestingPairingCode ? 'Getting…' : 'Get Code'}
+                          </button>
+                        </div>
+                        {botPairingCode && (
+                          <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-mono text-xl font-black tracking-widest animate-pulse">
+                            {botPairingCode}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -3543,6 +3825,72 @@ WiFi
                           <MessageCircle className="h-4 w-4" />
                           <span>Share Directly to WhatsApp</span>
                         </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ================= WHATSAPP LINKING MODAL ================= */}
+                {showBotModal && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
+                    <div className="w-full max-w-md rounded-2xl border border-emerald-500/30 bg-slate-900 p-6 shadow-2xl space-y-5 text-center">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-base font-bold text-white flex items-center gap-2">
+                          <MessageCircle className="h-5 w-5 text-emerald-400" />
+                          Link WhatsApp with Bot
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={() => setShowBotModal(false)}
+                          className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer"
+                        >
+                          <X className="h-5 w-5" />
+                        </button>
+                      </div>
+
+                      <div className="space-y-3">
+                        <p className="text-xs text-slate-300">
+                          Scan this QR code from WhatsApp on your phone:
+                        </p>
+                        <div className="p-3 bg-white rounded-xl inline-block shadow-lg mx-auto">
+                          {botQrDataUrl ? (
+                            <img src={botQrDataUrl} alt="WhatsApp QR Code" className="w-52 h-52 block" />
+                          ) : (
+                            <div className="w-52 h-52 flex flex-col items-center justify-center text-slate-700 text-xs gap-2">
+                              <RefreshCw className="h-6 w-6 animate-spin text-emerald-600" />
+                              <span>Generating fresh QR code…</span>
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                          WhatsApp &rarr; Settings &rarr; Linked Devices &rarr; Link a Device
+                        </p>
+                      </div>
+
+                      <div className="border-t border-slate-800 pt-4 space-y-2">
+                        <p className="text-xs font-semibold text-slate-300">Or Link using Phone Number (No Camera)</p>
+                        <div className="flex gap-2">
+                          <input
+                            type="tel"
+                            value={botPairingPhone}
+                            onChange={e => setBotPairingPhone(e.target.value)}
+                            placeholder="e.g. 233552117787"
+                            className="flex-1 px-3 py-2 rounded-xl border border-slate-700 bg-slate-950 font-mono text-xs text-white focus:outline-none focus:border-emerald-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void handleRequestPairingCode()}
+                            disabled={isRequestingPairingCode}
+                            className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold cursor-pointer transition-all"
+                          >
+                            {isRequestingPairingCode ? 'Getting…' : 'Get Code'}
+                          </button>
+                        </div>
+                        {botPairingCode && (
+                          <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-mono text-xl font-black tracking-widest animate-pulse">
+                            {botPairingCode}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
